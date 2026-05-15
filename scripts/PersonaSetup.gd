@@ -196,6 +196,7 @@ func _on_confirm_pressed() -> void:
 		_shake(_name_field)
 		return
 	if _selections.size() < PersonaData.CATEGORIES.size():
+		_shake(_confirm_btn)
 		return
 	PersonaGenerator.save_persona(name, _selections)
 	setup_completed.emit()

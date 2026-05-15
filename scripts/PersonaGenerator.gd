@@ -27,12 +27,15 @@ static func save_persona(name: String, selections: Dictionary) -> void:
 		"system_prompt": build_system_prompt(name, selections)
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
-	file.store_string(JSON.stringify(data, "\t"))
+	if file:
+		file.store_string(JSON.stringify(data, "\t"))
 
 static func load_persona() -> Dictionary:
 	if not has_saved_persona():
 		return {}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if not file:
+		return {}
 	var result: Variant = JSON.parse_string(file.get_as_text())
 	return result if result is Dictionary else {}
 
