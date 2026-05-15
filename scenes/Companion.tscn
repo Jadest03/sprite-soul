@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://companion"]
+
+[ext_resource type="Script" path="res://scripts/Companion.gd" id="1_companion"]
+
+[node name="Companion" type="Node2D"]
+script = ExtResource("1_companion")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+scale = Vector2(5, 5)
