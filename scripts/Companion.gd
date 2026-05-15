@@ -5,7 +5,9 @@ const EmotionState = preload("res://scripts/EmotionState.gd")
 const BehaviorSelector = preload("res://scripts/BehaviorSelector.gd")
 
 const WALK_SPEED = 60.0
-const MOUSE_NEAR_DISTANCE = 80.0
+const MOUSE_NEAR_DISTANCE = 50.0
+# Half-size of the sprite at scale 5 (16x20 px → 80x100), plus padding
+const PASSTHROUGH_HALF := Vector2(48, 58)
 
 const STATE_COLORS = {
 	"idle":  Color(1.0, 0.85, 0.2),
@@ -53,6 +55,17 @@ func _process(delta: float) -> void:
 		fsm.transition_to(next)
 
 	_process_state(delta, mouse_pos)
+	_update_passthrough()
+
+func _update_passthrough() -> void:
+	var tl := position - PASSTHROUGH_HALF
+	var br := position + PASSTHROUGH_HALF
+	DisplayServer.window_set_mouse_passthrough(PackedVector2Array([
+		tl,
+		Vector2(br.x, tl.y),
+		br,
+		Vector2(tl.x, br.y),
+	]))
 
 func _process_state(delta: float, mouse_pos: Vector2) -> void:
 	match fsm.current_state:

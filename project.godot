@@ -18,8 +18,8 @@ EventBus="*res://autoloads/EventBus.gd"
 
 [display]
 
-window/size/viewport_width=1280
-window/size/viewport_height=720
+window/size/viewport_width=300
+window/size/viewport_height=200
 window/size/borderless=true
 window/per_pixel_transparency/allowed=true
 window/size/transparent=true
