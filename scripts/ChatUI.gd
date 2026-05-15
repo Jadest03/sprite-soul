@@ -1,7 +1,12 @@
 extends CanvasLayer
 
+const PersonaGenerator = preload("res://scripts/PersonaGenerator.gd")
+const MemoryStore = preload("res://scripts/MemoryStore.gd")
+
 const BUBBLE_HIDE_DELAY := 4.0
 const TYPING_INTERVAL := 0.03
+const OLLAMA_URL := "http://localhost:11434/api/chat"
+const OLLAMA_MODEL := "sprite-soul"
 
 var companion: Node2D = null
 
@@ -9,17 +14,25 @@ var _bubble: PanelContainer
 var _bubble_label: Label
 var _input_row: PanelContainer
 var _input_field: LineEdit
+var _http: HTTPRequest
 
 var _full_text := ""
 var _displayed_chars := 0
 var _typing_timer := 0.0
 var _is_typing := false
 var _hide_timer := 0.0
+var _waiting := false
+
+var _memory: MemoryStore
+var _system_prompt := ""
 
 func _ready() -> void:
 	layer = 10
 	_build_bubble()
 	_build_input()
+	_setup_http()
+	_load_persona()
+	_memory = MemoryStore.new()
 	EventBus.companion_clicked.connect(_on_companion_clicked)
 	EventBus.chat_response_received.connect(show_response)
 
@@ -51,6 +64,8 @@ func _update_bubble_position() -> void:
 	_bubble.position = Vector2(x, y)
 
 func _on_companion_clicked() -> void:
+	if _waiting:
+		return
 	if _input_row.visible:
 		_set_input_visible(false)
 		return
@@ -75,8 +90,65 @@ func _on_input_submitted(text: String) -> void:
 		return
 	_set_input_visible(false)
 	EventBus.chat_requested.emit(trimmed)
-	# TODO: 제거 — LLM 연결 후 chat_response_received로 대체
-	show_response(trimmed)
+	_send_to_ollama(trimmed)
+
+# --- Ollama 연결 ---
+
+func _setup_http() -> void:
+	_http = HTTPRequest.new()
+	add_child(_http)
+	_http.request_completed.connect(_on_http_completed)
+
+func _load_persona() -> void:
+	var persona := PersonaGenerator.load_persona()
+	if persona.has("system_prompt"):
+		_system_prompt = persona["system_prompt"]
+
+func _send_to_ollama(user_msg: String) -> void:
+	_memory.add("user", user_msg)
+	_waiting = true
+	_show_thinking()
+
+	var messages := _memory.build_messages(_system_prompt)
+	var body := JSON.stringify({
+		"model": OLLAMA_MODEL,
+		"messages": messages,
+		"stream": false
+	})
+	var err := _http.request(OLLAMA_URL, ["Content-Type: application/json"], HTTPClient.METHOD_POST, body)
+	if err != OK:
+		_on_ollama_error()
+
+func _on_http_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	_waiting = false
+	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		_on_ollama_error()
+		return
+
+	var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
+	if not parsed is Dictionary:
+		_on_ollama_error()
+		return
+
+	var reply: String = parsed.get("message", {}).get("content", "")
+	if reply.is_empty():
+		_on_ollama_error()
+		return
+
+	_memory.add("assistant", reply)
+	EventBus.chat_response_received.emit(reply)
+
+func _show_thinking() -> void:
+	_full_text = "..."
+	_displayed_chars = 3
+	_is_typing = false
+	_hide_timer = 0.0
+	_bubble_label.text = "..."
+	_bubble.show()
+
+func _on_ollama_error() -> void:
+	_waiting = false
+	EventBus.chat_response_received.emit("(연결 안 됨)")
 
 func _set_input_visible(visible: bool) -> void:
 	EventBus.chat_input_open = visible
