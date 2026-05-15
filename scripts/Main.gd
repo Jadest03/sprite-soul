@@ -1,11 +1,16 @@
 extends Node
 
 const CompanionScene = preload("res://scenes/Companion.tscn")
+const ChatUIScene = preload("res://scenes/ChatUI.tscn")
 const AREA_SIZE := Vector2i(300, 200)
 
 func _ready() -> void:
 	_setup_window()
-	add_child(CompanionScene.instantiate())
+	var companion := CompanionScene.instantiate()
+	add_child(companion)
+	var chat_ui := ChatUIScene.instantiate()
+	add_child(chat_ui)
+	chat_ui.companion = companion
 
 func _setup_window() -> void:
 	# Usable rect excludes macOS Dock and menu bar

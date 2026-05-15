@@ -8,6 +8,7 @@ const WALK_SPEED = 60.0
 const MOUSE_NEAR_DISTANCE = 50.0
 const PASSTHROUGH_HALF := Vector2(48, 58)
 const SPRITE_SCALE := Vector2(5.0, 5.0)
+const SPRITE_HALF := Vector2(40.0, 50.0)  # (16*5/2, 20*5/2)
 const EDGE_LEAN_THRESHOLD = 35.0
 const CURSOR_LEAN_DISTANCE = 120.0
 const CURSOR_LEAN_MAX = 3.0
@@ -67,6 +68,10 @@ func _process(delta: float) -> void:
 	_update_passthrough()
 
 func _update_passthrough() -> void:
+	if EventBus.chat_input_open:
+		# Input 열려 있을 때는 창 전체 interactive
+		DisplayServer.window_set_mouse_passthrough(PackedVector2Array())
+		return
 	var tl := position - PASSTHROUGH_HALF
 	var br := position + PASSTHROUGH_HALF
 	DisplayServer.window_set_mouse_passthrough(PackedVector2Array([
@@ -86,13 +91,13 @@ func _process_state(delta: float, mouse_pos: Vector2) -> void:
 func _do_walk(delta: float) -> void:
 	position += _walk_direction * WALK_SPEED * delta
 
-	if position.x < 16 or position.x > _screen_rect.size.x - 16:
+	if position.x < SPRITE_HALF.x or position.x > _screen_rect.size.x - SPRITE_HALF.x:
 		_walk_direction.x *= -1
 		sprite.flip_h = _walk_direction.x < 0
-	if position.y < 16 or position.y > _screen_rect.size.y - 16:
+	if position.y < SPRITE_HALF.y or position.y > _screen_rect.size.y - SPRITE_HALF.y:
 		_walk_direction.y *= -1
 
-	position = position.clamp(Vector2(16, 16), _screen_rect.size - Vector2(16, 16))
+	position = position.clamp(SPRITE_HALF, _screen_rect.size - SPRITE_HALF)
 
 func _do_react(mouse_pos: Vector2) -> void:
 	sprite.flip_h = mouse_pos.x < position.x
