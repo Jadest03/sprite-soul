@@ -6,8 +6,11 @@ const BehaviorSelector = preload("res://scripts/BehaviorSelector.gd")
 
 const WALK_SPEED = 60.0
 const MOUSE_NEAR_DISTANCE = 50.0
-# Half-size of the sprite at scale 5 (16x20 px → 80x100), plus padding
 const PASSTHROUGH_HALF := Vector2(48, 58)
+const SPRITE_SCALE := Vector2(5.0, 5.0)
+const EDGE_LEAN_THRESHOLD = 35.0
+const CURSOR_LEAN_DISTANCE = 120.0
+const CURSOR_LEAN_MAX = 3.0
 
 const STATE_COLORS = {
 	"idle":  Color(1.0, 0.85, 0.2),
@@ -22,6 +25,8 @@ var behavior
 
 var _walk_direction: Vector2 = Vector2.RIGHT
 var _screen_rect: Rect2
+var _idle_micro_timer: float = 0.0
+var _next_idle_micro: float = 0.0
 
 @onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
 
@@ -39,6 +44,7 @@ func _ready() -> void:
 	_screen_rect = Rect2(Vector2.ZERO, get_viewport_rect().size)
 	position = _screen_rect.get_center()
 	_pick_walk_direction()
+	_next_idle_micro = randf_range(6.0, 12.0)
 
 	sprite.sprite_frames = _build_placeholder_frames()
 	sprite.play("idle")
@@ -55,6 +61,9 @@ func _process(delta: float) -> void:
 		fsm.transition_to(next)
 
 	_process_state(delta, mouse_pos)
+	_process_idle_micro(delta)
+	_update_cursor_lean(delta, mouse_pos)
+	_update_edge_lean(delta)
 	_update_passthrough()
 
 func _update_passthrough() -> void:
@@ -102,11 +111,55 @@ func _input(event: InputEvent) -> void:
 		if position.distance_to(get_viewport().get_mouse_position()) < MOUSE_NEAR_DISTANCE:
 			emotion.on_click()
 			EventBus.companion_clicked.emit()
+			_do_bounce()
 
 func _pick_walk_direction() -> void:
 	var angle := randf_range(0.0, TAU)
 	_walk_direction = Vector2(cos(angle), sin(angle))
 	sprite.flip_h = _walk_direction.x < 0
+
+# --- Micro-interactions ---
+
+func _process_idle_micro(delta: float) -> void:
+	if fsm.current_state != CompanionFSM.State.IDLE:
+		_idle_micro_timer = 0.0
+		return
+	_idle_micro_timer += delta
+	if _idle_micro_timer >= _next_idle_micro:
+		_idle_micro_timer = 0.0
+		_next_idle_micro = randf_range(6.0, 12.0)
+		_do_yawn()
+
+func _do_yawn() -> void:
+	var tween := create_tween()
+	tween.tween_property(sprite, "scale", Vector2(5.8, 4.2), 0.35)
+	tween.tween_property(sprite, "scale", Vector2(4.6, 5.6), 0.2)
+	tween.tween_property(sprite, "scale", SPRITE_SCALE, 0.35)
+
+func _do_bounce() -> void:
+	var tween := create_tween()
+	tween.tween_property(sprite, "position:y", -10.0, 0.1)
+	tween.tween_property(sprite, "position:y", 0.0, 0.18)
+
+func _update_cursor_lean(delta: float, mouse_pos: Vector2) -> void:
+	var target_offset := Vector2.ZERO
+	var state: int = fsm.current_state
+	if state == CompanionFSM.State.IDLE or state == CompanionFSM.State.REACT:
+		var diff := mouse_pos - position
+		var dist := diff.length()
+		if dist > 0.0 and dist < CURSOR_LEAN_DISTANCE:
+			var strength := 1.0 - dist / CURSOR_LEAN_DISTANCE
+			target_offset = diff.normalized() * CURSOR_LEAN_MAX * strength
+	sprite.offset = sprite.offset.lerp(target_offset, 5.0 * delta)
+
+func _update_edge_lean(delta: float) -> void:
+	var target_rotation := 0.0
+	if fsm.current_state == CompanionFSM.State.IDLE:
+		if position.x < EDGE_LEAN_THRESHOLD:
+			target_rotation = -0.18
+		elif position.x > _screen_rect.size.x - EDGE_LEAN_THRESHOLD:
+			target_rotation = 0.18
+	sprite.rotation = lerp(sprite.rotation, target_rotation, 4.0 * delta)
 
 # --- Placeholder sprite generation ---
 
