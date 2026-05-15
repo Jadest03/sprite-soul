@@ -28,6 +28,7 @@ var _walk_direction: Vector2 = Vector2.RIGHT
 var _screen_rect: Rect2
 var _idle_micro_timer: float = 0.0
 var _next_idle_micro: float = 0.0
+var _chat_locked := false
 
 @onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
 
@@ -41,6 +42,8 @@ func _ready() -> void:
 	add_child(behavior)
 
 	fsm.state_entered.connect(_on_state_entered)
+	EventBus.chat_requested.connect(_on_chat_requested)
+	EventBus.chat_response_received.connect(_on_chat_response_received)
 
 	_screen_rect = Rect2(Vector2.ZERO, get_viewport_rect().size)
 	position = _screen_rect.get_center()
@@ -57,9 +60,10 @@ func _process(delta: float) -> void:
 	var mouse_pos := get_viewport().get_mouse_position()
 	var mouse_near := position.distance_to(mouse_pos) < MOUSE_NEAR_DISTANCE
 
-	var next: int = behavior.select(fsm, emotion, mouse_near)
-	if next != fsm.current_state:
-		fsm.transition_to(next)
+	if not _chat_locked:
+		var next: int = behavior.select(fsm, emotion, mouse_near)
+		if next != fsm.current_state:
+			fsm.transition_to(next)
 
 	_process_state(delta, mouse_pos)
 	_process_idle_micro(delta)
@@ -117,6 +121,13 @@ func _input(event: InputEvent) -> void:
 			emotion.on_click()
 			EventBus.companion_clicked.emit()
 			_do_bounce()
+
+func _on_chat_requested(_text: String) -> void:
+	_chat_locked = true
+	fsm.transition_to(CompanionFSM.State.REACT)
+
+func _on_chat_response_received(_text: String) -> void:
+	_chat_locked = false
 
 func _pick_walk_direction() -> void:
 	var angle := randf_range(0.0, TAU)

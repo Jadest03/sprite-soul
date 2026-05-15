@@ -3,3 +3,5 @@ __pycache__/
 colab/
 *.gguf
 Modelfile
+.godot/
+*.uid

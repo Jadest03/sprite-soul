@@ -2,8 +2,9 @@ extends CanvasLayer
 
 const PersonaGenerator = preload("res://scripts/PersonaGenerator.gd")
 const MemoryStore = preload("res://scripts/MemoryStore.gd")
+const UserProfile = preload("res://scripts/UserProfile.gd")
 
-const BUBBLE_HIDE_DELAY := 4.0
+const BUBBLE_HIDE_DELAY := 5.0
 const TYPING_INTERVAL := 0.03
 const OLLAMA_URL := "http://localhost:11434/api/chat"
 const OLLAMA_MODEL := "sprite-soul"
@@ -24,6 +25,7 @@ var _hide_timer := 0.0
 var _waiting := false
 
 var _memory: MemoryStore
+var _profile: UserProfile
 var _system_prompt := ""
 
 func _ready() -> void:
@@ -33,6 +35,7 @@ func _ready() -> void:
 	_setup_http()
 	_load_persona()
 	_memory = MemoryStore.new()
+	_profile = UserProfile.new()
 	EventBus.companion_clicked.connect(_on_companion_clicked)
 	EventBus.chat_response_received.connect(show_response)
 
@@ -105,11 +108,13 @@ func _load_persona() -> void:
 		_system_prompt = persona["system_prompt"]
 
 func _send_to_ollama(user_msg: String) -> void:
+	_try_extract_name(user_msg)
 	_memory.add("user", user_msg)
 	_waiting = true
 	_show_thinking()
 
-	var messages := _memory.build_messages(_system_prompt)
+	var full_prompt := _system_prompt + _profile.to_prompt_fragment()
+	var messages := _memory.build_messages(full_prompt)
 	var body := JSON.stringify({
 		"model": OLLAMA_MODEL,
 		"messages": messages,
@@ -118,6 +123,28 @@ func _send_to_ollama(user_msg: String) -> void:
 	var err := _http.request(OLLAMA_URL, ["Content-Type: application/json"], HTTPClient.METHOD_POST, body)
 	if err != OK:
 		_on_ollama_error()
+
+func _try_extract_name(text: String) -> void:
+	# "내 이름은 X야", "나는 X야", "X라고 불러줘" 패턴 감지
+	var patterns := [
+		["내 이름은 ", ["야", "이야", "이에요", "예요"]],
+		["저는 ", ["이에요", "예요", "이야", "야"]],
+		["나는 ", ["야", "이야"]],
+	]
+	for pair in patterns:
+		var prefix: String = pair[0]
+		var suffixes: Array = pair[1]
+		var idx := text.find(prefix)
+		if idx < 0:
+			continue
+		var rest := text.substr(idx + prefix.length())
+		for suffix in suffixes:
+			var end := rest.find(suffix)
+			if end > 0 and end <= 6:
+				var name := rest.substr(0, end).strip_edges()
+				if name.length() >= 1:
+					_profile.set_name(name)
+					return
 
 func _on_http_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	_waiting = false
@@ -186,14 +213,14 @@ func _build_bubble() -> void:
 	_bubble_label = Label.new()
 	_bubble_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_bubble_label.add_theme_color_override("font_color", Color.WHITE)
-	_bubble_label.add_theme_font_size_override("font_size", 11)
-	_bubble_label.custom_minimum_size = Vector2(110, 0)
+	_bubble_label.add_theme_font_size_override("font_size", 15)
+	_bubble_label.custom_minimum_size = Vector2(150, 0)
 	margin.add_child(_bubble_label)
 
 func _build_input() -> void:
 	_input_row = PanelContainer.new()
-	_input_row.position = Vector2(4, 174)
-	_input_row.size = Vector2(292, 22)
+	_input_row.position = Vector2(4, 166)
+	_input_row.size = Vector2(292, 30)
 	_input_row.hide()
 	add_child(_input_row)
 
@@ -207,16 +234,16 @@ func _build_input() -> void:
 	_input_row.add_theme_stylebox_override("panel", style)
 
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left",   6)
-	margin.add_theme_constant_override("margin_right",  6)
-	margin.add_theme_constant_override("margin_top",    3)
-	margin.add_theme_constant_override("margin_bottom", 3)
+	margin.add_theme_constant_override("margin_left",   8)
+	margin.add_theme_constant_override("margin_right",  8)
+	margin.add_theme_constant_override("margin_top",    5)
+	margin.add_theme_constant_override("margin_bottom", 5)
 	_input_row.add_child(margin)
 
 	_input_field = LineEdit.new()
 	_input_field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_input_field.placeholder_text = "말 걸기..."
-	_input_field.add_theme_font_size_override("font_size", 11)
+	_input_field.add_theme_font_size_override("font_size", 15)
 	_input_field.add_theme_color_override("font_color", Color.WHITE)
 	_input_field.add_theme_color_override("font_placeholder_color", Color(0.55, 0.55, 0.6))
 	var empty := StyleBoxEmpty.new()
