@@ -146,6 +146,29 @@ func _setup_companion_window() -> void:
 func _launch_companion() -> void:
 	var companion := CompanionScene.instantiate()
 	add_child(companion)
+	companion.reset_requested.connect(_on_reset_requested)
 	var chat_ui := ChatUIScene.instantiate()
 	add_child(chat_ui)
 	chat_ui.companion = companion
+
+func _on_reset_requested() -> void:
+	PersonaGenerator.delete_persona()
+	_delete_sprites_dir()
+	for child in get_children():
+		child.queue_free()
+	await get_tree().process_frame
+	_setup_setup_window()
+	_launch_setup()
+
+func _delete_sprites_dir() -> void:
+	var dir_path := OS.get_user_data_dir() + "/sprites"
+	var dir := DirAccess.open(dir_path)
+	if not dir:
+		return
+	dir.list_dir_begin()
+	var fname := dir.get_next()
+	while fname != "":
+		if not dir.current_is_dir():
+			dir.remove(fname)
+		fname = dir.get_next()
+	DirAccess.remove_absolute(dir_path)

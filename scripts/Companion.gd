@@ -1,5 +1,7 @@
 extends Node2D
 
+signal reset_requested
+
 const CompanionFSM = preload("res://scripts/CompanionFSM.gd")
 const EmotionState = preload("res://scripts/EmotionState.gd")
 const BehaviorSelector = preload("res://scripts/BehaviorSelector.gd")
@@ -29,6 +31,7 @@ var _screen_rect: Rect2
 var _idle_micro_timer: float = 0.0
 var _next_idle_micro: float = 0.0
 var _chat_locked := false
+var _context_menu: PopupMenu
 
 @onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
 
@@ -44,6 +47,13 @@ func _ready() -> void:
 	fsm.state_entered.connect(_on_state_entered)
 	EventBus.chat_requested.connect(_on_chat_requested)
 	EventBus.chat_response_received.connect(_on_chat_response_received)
+
+	_context_menu = PopupMenu.new()
+	_context_menu.add_item("새 캐릭터 만들기", 0)
+	_context_menu.add_separator()
+	_context_menu.add_item("종료", 1)
+	_context_menu.id_pressed.connect(_on_context_menu_pressed)
+	add_child(_context_menu)
 
 	_screen_rect = Rect2(Vector2.ZERO, get_viewport_rect().size)
 
@@ -116,9 +126,18 @@ func _on_state_entered(state: int) -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		if position.distance_to(get_viewport().get_mouse_position()) < MOUSE_NEAR_DISTANCE:
-			emotion.on_click()
-			EventBus.companion_clicked.emit()
-			_do_bounce()
+			if event.button_index == MOUSE_BUTTON_LEFT:
+				emotion.on_click()
+				EventBus.companion_clicked.emit()
+				_do_bounce()
+			elif event.button_index == MOUSE_BUTTON_RIGHT:
+				_context_menu.position = DisplayServer.mouse_get_position()
+				_context_menu.popup()
+
+func _on_context_menu_pressed(id: int) -> void:
+	match id:
+		0: reset_requested.emit()
+		1: get_tree().quit()
 
 func _on_chat_requested(_text: String) -> void:
 	_chat_locked = true
