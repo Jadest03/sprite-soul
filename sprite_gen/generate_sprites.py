@@ -86,36 +86,44 @@ def tight_crop(img):
 
 
 def remove_white_bg(img):
-    """테두리에서 BFS로 순수 흰 배경만 투명 처리 (캐릭터 내부 밝은 색 보호)."""
-    from collections import deque
-    rgba = img.convert("RGBA")
-    arr = np.array(rgba).copy()
-    h, w = arr.shape[:2]
-
-    # 235 이상만 배경으로 간주 — 흰 셔츠 등 캐릭터 내부 픽셀 보호
-    bg = (arr[:, :, 0] > 235) & (arr[:, :, 1] > 235) & (arr[:, :, 2] > 235)
-
-    visited = np.zeros((h, w), dtype=bool)
-    queue = deque()
-    for x in range(w):
-        if bg[0, x]:     queue.append((0, x))
-        if bg[h-1, x]:   queue.append((h-1, x))
-    for y in range(h):
-        if bg[y, 0]:     queue.append((y, 0))
-        if bg[y, w-1]:   queue.append((y, w-1))
-
-    while queue:
-        y, x = queue.popleft()
-        if visited[y, x] or not bg[y, x]:
-            continue
-        visited[y, x] = True
-        for dy, dx in ((-1,0),(1,0),(0,-1),(0,1)):
-            ny, nx = y + dy, x + dx
-            if 0 <= ny < h and 0 <= nx < w and not visited[ny, nx] and bg[ny, nx]:
-                queue.append((ny, nx))
-
-    arr[visited, 3] = 0
-    return Image.fromarray(arr)
+    """BiRefNet AI로 배경 제거 (4x 업스케일 후 처리 → alpha 이진화)."""
+    try:
+        from rembg import remove, new_session
+        rgba = img.convert("RGBA")
+        w, h = rgba.size
+        large = rgba.resize((w * 4, h * 4), Image.NEAREST)
+        session = new_session("birefnet-general")
+        result_large = remove(large, session=session)
+        result = result_large.resize((w, h), Image.LANCZOS)
+        arr = np.array(result)
+        arr[:, :, 3] = np.where(arr[:, :, 3] > 128, 255, 0)
+        return Image.fromarray(arr)
+    except Exception:
+        # rembg 없으면 BFS fallback
+        from collections import deque
+        rgba = img.convert("RGBA")
+        arr = np.array(rgba).copy()
+        h, w = arr.shape[:2]
+        bg = (arr[:, :, 0] > 235) & (arr[:, :, 1] > 235) & (arr[:, :, 2] > 235)
+        visited = np.zeros((h, w), dtype=bool)
+        queue = deque()
+        for x in range(w):
+            if bg[0, x]:   queue.append((0, x))
+            if bg[h-1, x]: queue.append((h-1, x))
+        for y in range(h):
+            if bg[y, 0]:   queue.append((y, 0))
+            if bg[y, w-1]: queue.append((y, w-1))
+        while queue:
+            y, x = queue.popleft()
+            if visited[y, x] or not bg[y, x]:
+                continue
+            visited[y, x] = True
+            for dy, dx in ((-1,0),(1,0),(0,-1),(0,1)):
+                ny, nx = y + dy, x + dx
+                if 0 <= ny < h and 0 <= nx < w and not visited[ny, nx] and bg[ny, nx]:
+                    queue.append((ny, nx))
+        arr[visited, 3] = 0
+        return Image.fromarray(arr)
 
 
 def split_frames(result, out_dir, frame_size=128, margin=8):

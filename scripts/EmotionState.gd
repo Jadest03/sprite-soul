@@ -27,6 +27,10 @@ func on_click() -> void:
 	attention = 1.0
 	energy    = minf(1.0, energy + 0.1)
 
+func wake_up() -> void:
+	energy    = maxf(energy, 0.5)
+	attention = 1.0
+
 func is_sleepy() -> bool:
 	return energy < 0.2
 

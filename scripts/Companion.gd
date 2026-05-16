@@ -7,7 +7,7 @@ const EmotionState = preload("res://scripts/EmotionState.gd")
 const BehaviorSelector = preload("res://scripts/BehaviorSelector.gd")
 
 const WALK_SPEED = 60.0
-const MOUSE_NEAR_DISTANCE = 50.0
+const MOUSE_NEAR_DISTANCE = 80.0
 const EDGE_LEAN_THRESHOLD = 35.0
 
 # 실제 스프라이트 vs placeholder에 따라 _ready에서 결정
@@ -143,6 +143,7 @@ func _input(event: InputEvent) -> void:
 		if position.distance_to(get_viewport().get_mouse_position()) < MOUSE_NEAR_DISTANCE:
 			_reset_sleep_timer()
 			if fsm.current_state == CompanionFSM.State.SLEEP:
+				emotion.wake_up()
 				fsm.transition_to(CompanionFSM.State.IDLE)
 				return
 			if event.button_index == MOUSE_BUTTON_LEFT:

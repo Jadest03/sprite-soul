@@ -53,28 +53,32 @@ func _show_loading_ui() -> void:
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(center)
+
 	var vbox := VBoxContainer.new()
-	vbox.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	vbox.add_theme_constant_override("separation", 16)
+	vbox.add_theme_constant_override("separation", 20)
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	add_child(vbox)
+	center.add_child(vbox)
 
 	var title := Label.new()
 	title.text = "스프라이트 생성 중..."
-	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_font_size_override("font_size", 30)
 	title.add_theme_color_override("font_color", Color(0.92, 0.92, 0.95))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(title)
 
 	_loading_label = Label.new()
 	_loading_label.text = "모델 로드 중..."
-	_loading_label.add_theme_font_size_override("font_size", 15)
+	_loading_label.add_theme_font_size_override("font_size", 19)
 	_loading_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.55))
 	_loading_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_loading_label.custom_minimum_size = Vector2(400, 0)
 	vbox.add_child(_loading_label)
 
 	_progress_bar = ProgressBar.new()
-	_progress_bar.custom_minimum_size = Vector2(320, 10)
+	_progress_bar.custom_minimum_size = Vector2(400, 14)
 	_progress_bar.max_value = 100
 	_progress_bar.value = 0
 	_progress_bar.show_percentage = false
@@ -82,7 +86,7 @@ func _show_loading_ui() -> void:
 
 	var hint := Label.new()
 	hint.text = "첫 실행 시 모델 다운로드(~13GB)가 필요해요"
-	hint.add_theme_font_size_override("font_size", 13)
+	hint.add_theme_font_size_override("font_size", 16)
 	hint.add_theme_color_override("font_color", Color(0.4, 0.4, 0.45))
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(hint)
