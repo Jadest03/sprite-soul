@@ -56,7 +56,7 @@ def build_prompt(character: str, use_image_ref: bool = False) -> str:
         "first row is 3 walking frames facing down and 1 frame both arms raised, "
         "second row is 3 walking frames facing left and 1 frame jumping left, "
         "third row is 3 walking frames facing right and 1 frame jumping right, "
-        "fourth row is 3 walking frames back view facing up and 1 frame lying on floor. "
+        "fourth row is 3 upright walking frames showing the character from behind (back view, walking away) and 1 frame of the character lying flat on the floor. "
         "full body visible including feet, white background between frames, chibi style, retro RPG game sprite."
     )
 
@@ -161,6 +161,10 @@ def split_frames(result, out_dir, frame_size=128, margin=8):
         arr = np.array(frame)
         return int((arr[:, :, 3] > 10).sum()) < min_opaque
 
+    # 폴백 이전에 유효성 기록 (폴백 후 체크하면 항상 valid로 보임)
+    walk2_valid = not _is_empty(raw_frames["walk_right_2"])
+    walk3_valid = not _is_empty(raw_frames["walk_right_3"])
+
     for row_names in FRAME_NAMES:
         fallback = next((raw_frames[n] for n in row_names if not _is_empty(raw_frames[n])), None)
         if fallback is None:
@@ -170,16 +174,23 @@ def split_frames(result, out_dir, frame_size=128, margin=8):
                 raw_frames[name] = fallback.copy()
                 fallback.copy().save(os.path.join(out_dir, f"frame_{name}.png"))
 
-    # 4패스: walk_right_2/3 유효 여부에 따라 ANIM_MAP 결정
-    # 16프레임 모두 생성된 경우: walk_1→walk_right_1, walk_2→walk_right_2, walk_3→walk_right_3
-    # 8프레임만 생성된 경우(col 1,2 빈칸): walk_3→jump_right로 2포즈 사이클 확보
-    walk_right_3_valid = not _is_empty(raw_frames["walk_right_3"])
+    # 4패스: 유효 프레임에 따라 ANIM_MAP 동적 결정
+
+    if walk2_valid and walk3_valid:
+        # 16프레임: 3포즈 walk 사이클
+        walk_2_src, walk_3_src = "walk_right_2", "walk_right_3"
+    elif walk2_valid:
+        walk_2_src, walk_3_src = "walk_right_2", "jump_right"
+    else:
+        # 8프레임: walk_right_1 ↔ jump_right 교차 사이클
+        walk_2_src, walk_3_src = "jump_right", "walk_right_1"
+
     ANIM_MAP = {
         "idle_1":  "walk_down_1",
         "idle_2":  "arms_raised",
         "walk_1":  "walk_right_1",
-        "walk_2":  "walk_right_2",
-        "walk_3":  "walk_right_3" if walk_right_3_valid else "jump_right",
+        "walk_2":  walk_2_src,
+        "walk_3":  walk_3_src,
         "sleep_1": "lying_down",
         "sleep_2": "walk_back_1",
         "react_1": "arms_raised",
