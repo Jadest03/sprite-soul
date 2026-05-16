@@ -40,14 +40,18 @@ def detect_device():
         return "cpu", torch.float32
 
 
-def build_prompt(character: str) -> str:
+def build_prompt(character: str, use_image_ref: bool = False) -> str:
+    if use_image_ref:
+        base = "Create a pixel art spritesheet of the character in the image."
+    else:
+        base = f"pixel art spritesheet of {character}."
     return (
-        f"pixel art spritesheet of {character}. "
-        "4 by 4 grid, 16 frames total, evenly spaced uniform cells. "
-        "Row 1: 3 walking frames facing down, 1 frame arms raised. "
-        "Row 2: 3 walking frames facing left, 1 frame jumping left. "
-        "Row 3: 3 walking frames facing right, 1 frame jumping right. "
-        "Row 4: 3 walking frames facing up back view, 1 frame lying on floor. "
+        base + " "
+        "The spritesheet is a 4 by 4 grid of four rows of frames - "
+        "first row is 3 walking frames facing down and 1 frame both arms raised, "
+        "second row is 3 walking frames facing left and 1 frame jumping left, "
+        "third row is 3 walking frames facing right and 1 frame jumping right, "
+        "fourth row is 3 walking frames back view facing up and 1 frame lying on floor. "
         "white background between frames, chibi style, retro RPG game sprite."
     )
 
@@ -212,6 +216,7 @@ def generate(args):
     device, dtype = detect_device()
     log(f"디바이스: {device.upper()}")
 
+    use_image_ref = bool(args.reference_image)
     steps = args.steps if args.steps else (64 if device != "cpu" else 20)
     if device == "cpu":
         log(f"CPU 모드: {steps}스텝 (시간이 오래 걸릴 수 있어요)")
@@ -233,17 +238,24 @@ def generate(args):
     else:
         t = None
 
-    from diffusers import DiffusionPipeline
-
     hf_token = args.hf_token or os.environ.get("HF_TOKEN", "")
     if hf_token:
         from huggingface_hub import login
         login(token=hf_token, add_to_git_credential=False)
 
-    pipe = DiffusionPipeline.from_pretrained(
-        "black-forest-labs/FLUX.2-klein-4B",
-        torch_dtype=dtype,
-    )
+    if use_image_ref:
+        from diffusers import FluxImg2ImgPipeline
+        pipe = FluxImg2ImgPipeline.from_pretrained(
+            "black-forest-labs/FLUX.2-klein-4B",
+            torch_dtype=dtype,
+        )
+    else:
+        from diffusers import DiffusionPipeline
+        pipe = DiffusionPipeline.from_pretrained(
+            "black-forest-labs/FLUX.2-klein-4B",
+            torch_dtype=dtype,
+        )
+
     pipe.load_lora_weights(
         "svntax-dev/pixel_spritesheet_4walk_small_lora_v1",
         weight_name="pixel_4walk_small_flux2_klein_base_4b_v1.safetensors",
@@ -254,7 +266,7 @@ def generate(args):
         t.join(timeout=1)
     log("모델 로드 완료")
 
-    prompt = build_prompt(args.character)
+    prompt = build_prompt(args.character, use_image_ref)
     generator = torch.Generator(device).manual_seed(args.seed)
 
     def on_step_end(pipe, step, timestep, callback_kwargs):
@@ -262,16 +274,30 @@ def generate(args):
         return callback_kwargs
 
     log(f"스프라이트 생성 시작 ({steps}스텝)")
-    result = pipe(
-        prompt=prompt,
-        num_inference_steps=steps,
-        guidance_scale=0.5,
-        height=512,
-        width=512,
-        generator=generator,
-        callback_on_step_end=on_step_end,
-        callback_on_step_end_tensor_inputs=["latents"],
-    ).images[0]
+
+    if use_image_ref:
+        ref_img = Image.open(args.reference_image).convert("RGB").resize((512, 512), NEAREST)
+        result = pipe(
+            prompt=prompt,
+            image=ref_img,
+            strength=0.75,
+            num_inference_steps=steps,
+            guidance_scale=0.5,
+            generator=generator,
+            callback_on_step_end=on_step_end,
+            callback_on_step_end_tensor_inputs=["latents"],
+        ).images[0]
+    else:
+        result = pipe(
+            prompt=prompt,
+            num_inference_steps=steps,
+            guidance_scale=0.5,
+            height=512,
+            width=512,
+            generator=generator,
+            callback_on_step_end=on_step_end,
+            callback_on_step_end_tensor_inputs=["latents"],
+        ).images[0]
     log("이미지 생성 완료, 프레임 분리 중...")
 
     os.makedirs(args.output, exist_ok=True)
@@ -293,7 +319,8 @@ if __name__ == "__main__":
     parser.add_argument("--output",    default="./sprites", help="출력 디렉토리")
     parser.add_argument("--seed",      type=int, default=42)
     parser.add_argument("--steps",     type=int, default=None, help="추론 스텝 (기본: GPU=64, CPU=20)")
-    parser.add_argument("--hf-token",  default="", help="HuggingFace 토큰 (또는 HF_TOKEN 환경변수)")
-    parser.add_argument("--status-file", default="", help="Godot용 진행 상태 파일 경로")
+    parser.add_argument("--hf-token",       default="", help="HuggingFace 토큰 (또는 HF_TOKEN 환경변수)")
+    parser.add_argument("--status-file",    default="", help="Godot용 진행 상태 파일 경로")
+    parser.add_argument("--reference-image", default="", help="캐릭터 참고 이미지 경로 (img2img 모드)")
     args = parser.parse_args()
     generate(args)

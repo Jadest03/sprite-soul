@@ -4,7 +4,7 @@ const PersonaData = preload("res://scripts/PersonaData.gd")
 const PersonaGenerator = preload("res://scripts/PersonaGenerator.gd")
 const UserProfile = preload("res://scripts/UserProfile.gd")
 
-signal setup_completed(appearance: String)
+signal setup_completed(appearance: String, reference_image_path: String)
 
 const BG_COLOR     := Color(0.08, 0.08, 0.12)
 const TEXT_COLOR   := Color(0.92, 0.92, 0.95)
@@ -30,6 +30,8 @@ var _confirm_btn: Button
 var _appearance_fields: Dictionary = {}
 var _appearance_field_nodes: Dictionary = {}
 var _gender_group: ButtonGroup
+var _reference_image_path: String = ""
+var _ref_preview: TextureRect
 
 # 버튼 스타일 캐시 — 토글 시마다 재생성하지 않도록
 var _style_normal: StyleBoxFlat
@@ -80,6 +82,7 @@ func _build_ui() -> void:
 
 	_add_title(vbox)
 	_add_name_section(vbox)
+	_add_reference_image_section(vbox)
 	_add_appearance_section(vbox)
 	_add_hf_token_section(vbox)
 	_add_user_name_section(vbox)
@@ -113,6 +116,70 @@ func _build_ui() -> void:
 	_apply_btn_style(_confirm_btn, ACCENT_COLOR, Color(1, 1, 1))
 	_confirm_btn.pressed.connect(_on_confirm_pressed)
 	btn_margin.add_child(_confirm_btn)
+
+func _add_reference_image_section(parent: VBoxContainer) -> void:
+	var sep := HSeparator.new()
+	sep.add_theme_color_override("color", Color(0.2, 0.2, 0.25))
+	parent.add_child(sep)
+
+	var label := Label.new()
+	label.text = "캐릭터 참고 이미지 (선택)"
+	label.add_theme_font_size_override("font_size", FONT_LABEL)
+	label.add_theme_color_override("font_color", TEXT_COLOR)
+	parent.add_child(label)
+
+	var hint := Label.new()
+	hint.text = "이미지를 넣으면 해당 캐릭터를 픽셀아트로 변환해요. 없으면 텍스트 설명으로 생성."
+	hint.add_theme_font_size_override("font_size", FONT_SUB)
+	hint.add_theme_color_override("font_color", MUTED_COLOR)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD
+	parent.add_child(hint)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	parent.add_child(row)
+
+	var pick_btn := Button.new()
+	pick_btn.text = "이미지 선택"
+	pick_btn.add_theme_font_size_override("font_size", FONT_BTN)
+	pick_btn.custom_minimum_size = Vector2(120, BTN_HEIGHT)
+	_apply_btn_style(pick_btn, BTN_NORMAL, MUTED_COLOR)
+
+	var path_label := Label.new()
+	path_label.text = "선택된 파일 없음"
+	path_label.add_theme_font_size_override("font_size", FONT_BTN)
+	path_label.add_theme_color_override("font_color", MUTED_COLOR)
+	path_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	path_label.clip_text = true
+
+	_ref_preview = TextureRect.new()
+	_ref_preview.custom_minimum_size = Vector2(64, 64)
+	_ref_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_ref_preview.hide()
+
+	var dialog := FileDialog.new()
+	dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	dialog.access = FileDialog.ACCESS_FILESYSTEM
+	dialog.filters = ["*.png,*.jpg,*.jpeg,*.webp ; 이미지 파일"]
+	add_child(dialog)
+
+	pick_btn.pressed.connect(func():
+		dialog.popup_centered(Vector2(700, 500))
+	)
+	dialog.file_selected.connect(func(path: String):
+		_reference_image_path = path
+		path_label.text = path.get_file()
+		path_label.add_theme_color_override("font_color", TEXT_COLOR)
+		_apply_btn_style(pick_btn, BTN_SELECTED, Color(1, 1, 1))
+		var img := Image.load_from_file(path)
+		if img:
+			_ref_preview.texture = ImageTexture.create_from_image(img)
+			_ref_preview.show()
+	)
+
+	row.add_child(pick_btn)
+	row.add_child(path_label)
+	row.add_child(_ref_preview)
 
 func _add_title(parent: VBoxContainer) -> void:
 	var title := Label.new()
@@ -502,7 +569,7 @@ func _on_confirm_pressed() -> void:
 	if not user_name.is_empty():
 		var profile := UserProfile.new()
 		profile.set_name(user_name)
-	setup_completed.emit(appearance)
+	setup_completed.emit(appearance, _reference_image_path)
 
 func _shake(target: Control) -> void:
 	var original_x := target.position.x

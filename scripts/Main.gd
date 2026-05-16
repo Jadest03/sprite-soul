@@ -38,12 +38,12 @@ func _launch_setup() -> void:
 	add_child(setup)
 	setup.setup_completed.connect(_on_setup_completed)
 
-func _on_setup_completed(appearance: String) -> void:
+func _on_setup_completed(appearance: String, reference_image_path: String) -> void:
 	for child in get_children():
 		child.queue_free()
 	await get_tree().process_frame
 	_show_loading_ui()
-	_start_sprite_generation(appearance)
+	_start_sprite_generation(appearance, reference_image_path)
 
 # --- Sprite generation ---
 
@@ -91,13 +91,13 @@ func _show_loading_ui() -> void:
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(hint)
 
-func _start_sprite_generation(appearance: String) -> void:
+func _start_sprite_generation(appearance: String, reference_image_path: String = "") -> void:
 	_generator = SpriteGenerator.new()
 	add_child(_generator)
 	_generator.progress_updated.connect(_on_gen_progress)
 	_generator.generation_completed.connect(_on_gen_completed)
 	_generator.generation_failed.connect(_on_gen_failed)
-	_generator.generate(appearance)
+	_generator.generate(appearance, reference_image_path)
 
 func _on_gen_progress(message: String) -> void:
 	if message.begins_with("STEP:"):

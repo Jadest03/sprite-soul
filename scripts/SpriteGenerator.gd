@@ -9,14 +9,12 @@ var _status_file: String
 var _poll_timer: Timer
 
 
-func generate(character: String) -> void:
+func generate(character: String, reference_image_path: String = "") -> void:
 	_status_file = OS.get_user_data_dir() + "/gen_status.txt"
 
-	# 이전 상태 파일 삭제
 	if FileAccess.file_exists(_status_file):
 		DirAccess.remove_absolute(_status_file)
 
-	# 상태 파일 폴링 타이머 시작
 	_poll_timer = Timer.new()
 	_poll_timer.wait_time = 0.5
 	_poll_timer.timeout.connect(_poll_status)
@@ -24,10 +22,10 @@ func generate(character: String) -> void:
 	_poll_timer.start()
 
 	_thread = Thread.new()
-	_thread.start(_run_generation.bind(character))
+	_thread.start(_run_generation.bind(character, reference_image_path))
 
 
-func _run_generation(character: String) -> void:
+func _run_generation(character: String, reference_image_path: String) -> void:
 	var python := _find_python()
 	if python.is_empty():
 		call_deferred("_on_failed", "Python 3을 찾을 수 없어요.\npython.org에서 설치 후 재시작해주세요.")
@@ -44,6 +42,8 @@ func _run_generation(character: String) -> void:
 	]
 	if not hf_token.is_empty():
 		args.append_array(["--hf-token", hf_token])
+	if not reference_image_path.is_empty():
+		args.append_array(["--reference-image", reference_image_path])
 
 	var exit_code := OS.execute(python, args)
 
@@ -62,7 +62,6 @@ func _load_token() -> String:
 	return OS.get_environment("HF_TOKEN")
 
 func _find_python() -> String:
-	# 프로젝트 내 venv 우선
 	var venv := ProjectSettings.globalize_path("res://sprite_gen/.venv/bin/python")
 	if FileAccess.file_exists(venv):
 		return venv
