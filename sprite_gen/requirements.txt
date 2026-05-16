@@ -1,0 +1,10 @@
+torch>=2.1.0
+torchao>=0.16.0
+diffusers>=0.30.0
+transformers>=4.40.0
+accelerate>=0.27.0
+safetensors
+sentencepiece
+Pillow>=10.0.0
+huggingface_hub
+numpy

@@ -6,17 +6,9 @@ const MIN_IDLE_DURATION = 3.0
 const MIN_WALK_DURATION = 4.0
 const MIN_SLEEP_DURATION = 8.0
 
-func select(fsm, emotion, mouse_near: bool) -> int:
+func select(fsm, emotion, _mouse_near: bool) -> int:
 	var current: int = fsm.current_state
 	var t: float = fsm.time_in_state()
-
-	if mouse_near and emotion.is_attentive():
-		return CompanionFSM.State.REACT
-
-	if current == CompanionFSM.State.REACT:
-		if not mouse_near and not emotion.is_attentive():
-			return CompanionFSM.State.IDLE
-		return current
 
 	if emotion.is_sleepy():
 		if current != CompanionFSM.State.SLEEP:

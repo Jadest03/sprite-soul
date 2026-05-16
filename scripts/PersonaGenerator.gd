@@ -20,11 +20,12 @@ const SYSTEM_PROMPT_TEMPLATE = """너의 이름은 {name}이야.
 static func has_saved_persona() -> bool:
 	return FileAccess.file_exists(SAVE_PATH)
 
-static func save_persona(name: String, selections: Dictionary) -> void:
+static func save_persona(name: String, selections: Dictionary, appearance: String = "") -> void:
 	var data = {
 		"name": name,
 		"selections": selections,
-		"system_prompt": build_system_prompt(name, selections)
+		"system_prompt": build_system_prompt(name, selections),
+		"appearance": appearance,
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:

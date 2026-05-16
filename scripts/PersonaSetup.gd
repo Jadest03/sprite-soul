@@ -2,8 +2,9 @@ extends Node
 
 const PersonaData = preload("res://scripts/PersonaData.gd")
 const PersonaGenerator = preload("res://scripts/PersonaGenerator.gd")
+const UserProfile = preload("res://scripts/UserProfile.gd")
 
-signal setup_completed
+signal setup_completed(appearance: String)
 
 const BG_COLOR     := Color(0.08, 0.08, 0.12)
 const TEXT_COLOR   := Color(0.92, 0.92, 0.95)
@@ -22,6 +23,9 @@ const BTN_HEIGHT   := 42
 const CONFIRM_H    := 80
 
 var _name_field: LineEdit
+var _appearance_field: LineEdit
+var _hf_token_field: LineEdit
+var _user_name_field: LineEdit
 var _selections: Dictionary = {}
 var _confirm_btn: Button
 
@@ -53,6 +57,9 @@ func _build_ui() -> void:
 
 	_add_title(vbox)
 	_add_name_section(vbox)
+	_add_appearance_section(vbox)
+	_add_hf_token_section(vbox)
+	_add_user_name_section(vbox)
 	for category in PersonaData.CATEGORIES:
 		_add_category_section(vbox, category)
 
@@ -137,6 +144,152 @@ func _add_name_section(parent: VBoxContainer) -> void:
 	_name_field.add_theme_stylebox_override("read_only", empty)
 	pm.add_child(_name_field)
 
+func _add_appearance_section(parent: VBoxContainer) -> void:
+	var sep := HSeparator.new()
+	sep.add_theme_color_override("color", Color(0.2, 0.2, 0.25))
+	parent.add_child(sep)
+
+	var label := Label.new()
+	label.text = "외모 설명 (영문)"
+	label.add_theme_font_size_override("font_size", FONT_LABEL)
+	label.add_theme_color_override("font_color", TEXT_COLOR)
+	parent.add_child(label)
+
+	var hint := Label.new()
+	hint.text = "스프라이트 생성에 사용돼요. 예: girl with black hair, pink dress"
+	hint.add_theme_font_size_override("font_size", FONT_SUB)
+	hint.add_theme_color_override("font_color", MUTED_COLOR)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD
+	parent.add_child(hint)
+
+	var panel := PanelContainer.new()
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = BTN_NORMAL
+	ps.corner_radius_top_left     = 8
+	ps.corner_radius_top_right    = 8
+	ps.corner_radius_bottom_left  = 8
+	ps.corner_radius_bottom_right = 8
+	ps.set_content_margin_all(0)
+	panel.add_theme_stylebox_override("panel", ps)
+	parent.add_child(panel)
+
+	var pm := MarginContainer.new()
+	pm.add_theme_constant_override("margin_left",   12)
+	pm.add_theme_constant_override("margin_right",  12)
+	pm.add_theme_constant_override("margin_top",     8)
+	pm.add_theme_constant_override("margin_bottom",  8)
+	panel.add_child(pm)
+
+	_appearance_field = LineEdit.new()
+	_appearance_field.placeholder_text = "girl with black hair and pink dress"
+	_appearance_field.add_theme_font_size_override("font_size", FONT_INPUT)
+	_appearance_field.add_theme_color_override("font_color", TEXT_COLOR)
+	_appearance_field.add_theme_color_override("font_placeholder_color", MUTED_COLOR)
+	var empty := StyleBoxEmpty.new()
+	_appearance_field.add_theme_stylebox_override("normal",    empty)
+	_appearance_field.add_theme_stylebox_override("focus",     empty)
+	_appearance_field.add_theme_stylebox_override("read_only", empty)
+	pm.add_child(_appearance_field)
+
+func _add_hf_token_section(parent: VBoxContainer) -> void:
+	var sep := HSeparator.new()
+	sep.add_theme_color_override("color", Color(0.2, 0.2, 0.25))
+	parent.add_child(sep)
+
+	var label := Label.new()
+	label.text = "HuggingFace 토큰"
+	label.add_theme_font_size_override("font_size", FONT_LABEL)
+	label.add_theme_color_override("font_color", TEXT_COLOR)
+	parent.add_child(label)
+
+	var hint := Label.new()
+	hint.text = "huggingface.co/settings/tokens 에서 발급 (최초 1회만 입력)"
+	hint.add_theme_font_size_override("font_size", FONT_SUB)
+	hint.add_theme_color_override("font_color", MUTED_COLOR)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD
+	parent.add_child(hint)
+
+	var panel := PanelContainer.new()
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = BTN_NORMAL
+	ps.corner_radius_top_left     = 8
+	ps.corner_radius_top_right    = 8
+	ps.corner_radius_bottom_left  = 8
+	ps.corner_radius_bottom_right = 8
+	ps.set_content_margin_all(0)
+	panel.add_theme_stylebox_override("panel", ps)
+	parent.add_child(panel)
+
+	var pm := MarginContainer.new()
+	pm.add_theme_constant_override("margin_left",   12)
+	pm.add_theme_constant_override("margin_right",  12)
+	pm.add_theme_constant_override("margin_top",     8)
+	pm.add_theme_constant_override("margin_bottom",  8)
+	panel.add_child(pm)
+
+	_hf_token_field = LineEdit.new()
+	_hf_token_field.placeholder_text = "hf_..."
+	_hf_token_field.secret = true
+	_hf_token_field.add_theme_font_size_override("font_size", FONT_INPUT)
+	_hf_token_field.add_theme_color_override("font_color", TEXT_COLOR)
+	_hf_token_field.add_theme_color_override("font_placeholder_color", MUTED_COLOR)
+	var empty := StyleBoxEmpty.new()
+	_hf_token_field.add_theme_stylebox_override("normal",    empty)
+	_hf_token_field.add_theme_stylebox_override("focus",     empty)
+	_hf_token_field.add_theme_stylebox_override("read_only", empty)
+	# 저장된 토큰이 있으면 미리 채워두기
+	var saved := _load_saved_token()
+	if not saved.is_empty():
+		_hf_token_field.text = saved
+	pm.add_child(_hf_token_field)
+
+func _load_saved_token() -> String:
+	const TOKEN_PATH = "user://hf_token.txt"
+	if not FileAccess.file_exists(TOKEN_PATH):
+		return OS.get_environment("HF_TOKEN")
+	var f := FileAccess.open(TOKEN_PATH, FileAccess.READ)
+	return f.get_as_text().strip_edges() if f else ""
+
+func _add_user_name_section(parent: VBoxContainer) -> void:
+	var sep := HSeparator.new()
+	sep.add_theme_color_override("color", Color(0.2, 0.2, 0.25))
+	parent.add_child(sep)
+
+	var label := Label.new()
+	label.text = "내 이름 (선택)"
+	label.add_theme_font_size_override("font_size", FONT_LABEL)
+	label.add_theme_color_override("font_color", TEXT_COLOR)
+	parent.add_child(label)
+
+	var panel := PanelContainer.new()
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = BTN_NORMAL
+	ps.corner_radius_top_left     = 8
+	ps.corner_radius_top_right    = 8
+	ps.corner_radius_bottom_left  = 8
+	ps.corner_radius_bottom_right = 8
+	ps.set_content_margin_all(0)
+	panel.add_theme_stylebox_override("panel", ps)
+	parent.add_child(panel)
+
+	var pm := MarginContainer.new()
+	pm.add_theme_constant_override("margin_left",   12)
+	pm.add_theme_constant_override("margin_right",  12)
+	pm.add_theme_constant_override("margin_top",     8)
+	pm.add_theme_constant_override("margin_bottom",  8)
+	panel.add_child(pm)
+
+	_user_name_field = LineEdit.new()
+	_user_name_field.placeholder_text = "캐릭터가 나를 부를 이름"
+	_user_name_field.add_theme_font_size_override("font_size", FONT_INPUT)
+	_user_name_field.add_theme_color_override("font_color", TEXT_COLOR)
+	_user_name_field.add_theme_color_override("font_placeholder_color", MUTED_COLOR)
+	var empty := StyleBoxEmpty.new()
+	_user_name_field.add_theme_stylebox_override("normal",    empty)
+	_user_name_field.add_theme_stylebox_override("focus",     empty)
+	_user_name_field.add_theme_stylebox_override("read_only", empty)
+	pm.add_child(_user_name_field)
+
 func _add_category_section(parent: VBoxContainer, category: Dictionary) -> void:
 	var key: String = category["key"]
 	var options: Array = category["options"]
@@ -198,8 +351,24 @@ func _on_confirm_pressed() -> void:
 	if _selections.size() < PersonaData.CATEGORIES.size():
 		_shake(_confirm_btn)
 		return
-	PersonaGenerator.save_persona(name, _selections)
-	setup_completed.emit()
+	var appearance := _appearance_field.text.strip_edges()
+	if appearance.is_empty():
+		_shake(_appearance_field)
+		return
+	var hf_token := _hf_token_field.text.strip_edges()
+	if hf_token.is_empty():
+		_shake(_hf_token_field)
+		return
+	# 토큰 로컬 저장 (다음 실행 시 재사용)
+	var tf := FileAccess.open("user://hf_token.txt", FileAccess.WRITE)
+	if tf:
+		tf.store_string(hf_token)
+	PersonaGenerator.save_persona(name, _selections, appearance)
+	var user_name := _user_name_field.text.strip_edges()
+	if not user_name.is_empty():
+		var profile := UserProfile.new()
+		profile.set_name(user_name)
+	setup_completed.emit(appearance)
 
 func _shake(target: Control) -> void:
 	var original_x := target.position.x

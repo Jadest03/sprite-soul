@@ -5,3 +5,4 @@ colab/
 Modelfile
 .godot/
 *.uid
+sprite_gen/.venv/

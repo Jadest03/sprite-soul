@@ -6,12 +6,11 @@ const BehaviorSelector = preload("res://scripts/BehaviorSelector.gd")
 
 const WALK_SPEED = 60.0
 const MOUSE_NEAR_DISTANCE = 50.0
-const PASSTHROUGH_HALF := Vector2(48, 58)
-const SPRITE_SCALE := Vector2(5.0, 5.0)
-const SPRITE_HALF := Vector2(40.0, 50.0)  # (16*5/2, 20*5/2)
 const EDGE_LEAN_THRESHOLD = 35.0
-const CURSOR_LEAN_DISTANCE = 120.0
-const CURSOR_LEAN_MAX = 3.0
+
+# 실제 스프라이트 vs placeholder에 따라 _ready에서 결정
+var SPRITE_SCALE := Vector2(5.0, 5.0)
+var SPRITE_HALF  := Vector2(40.0, 50.0)
 
 const STATE_COLORS = {
 	"idle":  Color(1.0, 0.85, 0.2),
@@ -24,7 +23,8 @@ var fsm
 var emotion
 var behavior
 
-var _walk_direction: Vector2 = Vector2.RIGHT
+var _walk_dir_x: float = 1.0  # +1 오른쪽, -1 왼쪽
+var _ground_y: float = 0.0
 var _screen_rect: Rect2
 var _idle_micro_timer: float = 0.0
 var _next_idle_micro: float = 0.0
@@ -46,11 +46,21 @@ func _ready() -> void:
 	EventBus.chat_response_received.connect(_on_chat_response_received)
 
 	_screen_rect = Rect2(Vector2.ZERO, get_viewport_rect().size)
-	position = _screen_rect.get_center()
+
+	var loaded := _load_sprite_frames()
+	if loaded != null:
+		sprite.sprite_frames = loaded
+		SPRITE_SCALE = Vector2(0.65, 0.65)
+		SPRITE_HALF  = Vector2(42.0, 42.0)
+	else:
+		sprite.sprite_frames = _build_placeholder_frames()
+	sprite.scale = SPRITE_SCALE
+
+	# SPRITE_HALF 확정 후 위치 계산
+	_ground_y = _screen_rect.size.y - SPRITE_HALF.y
+	position = Vector2(_screen_rect.size.x * 0.5, _ground_y)
 	_pick_walk_direction()
 	_next_idle_micro = randf_range(6.0, 12.0)
-
-	sprite.sprite_frames = _build_placeholder_frames()
 	sprite.play("idle")
 
 func _process(delta: float) -> void:
@@ -67,25 +77,14 @@ func _process(delta: float) -> void:
 
 	_process_state(delta, mouse_pos)
 	_process_idle_micro(delta)
-	_update_cursor_lean(delta, mouse_pos)
 	_update_edge_lean(delta)
 	_update_passthrough()
 
 func _update_passthrough() -> void:
-	if EventBus.chat_input_open:
-		# Input 열려 있을 때는 창 전체 interactive
-		DisplayServer.window_set_mouse_passthrough(PackedVector2Array())
-		return
-	var tl := position - PASSTHROUGH_HALF
-	var br := position + PASSTHROUGH_HALF
-	DisplayServer.window_set_mouse_passthrough(PackedVector2Array([
-		tl,
-		Vector2(br.x, tl.y),
-		br,
-		Vector2(tl.x, br.y),
-	]))
+	pass  # mouse passthrough not supported on macOS OpenGL renderer
 
 func _process_state(delta: float, mouse_pos: Vector2) -> void:
+	position.y = _ground_y
 	match fsm.current_state:
 		CompanionFSM.State.WALK:
 			_do_walk(delta)
@@ -93,15 +92,14 @@ func _process_state(delta: float, mouse_pos: Vector2) -> void:
 			_do_react(mouse_pos)
 
 func _do_walk(delta: float) -> void:
-	position += _walk_direction * WALK_SPEED * delta
+	position.x += _walk_dir_x * WALK_SPEED * delta
+	position.y = _ground_y
 
 	if position.x < SPRITE_HALF.x or position.x > _screen_rect.size.x - SPRITE_HALF.x:
-		_walk_direction.x *= -1
-		sprite.flip_h = _walk_direction.x < 0
-	if position.y < SPRITE_HALF.y or position.y > _screen_rect.size.y - SPRITE_HALF.y:
-		_walk_direction.y *= -1
+		_walk_dir_x *= -1
+		sprite.flip_h = _walk_dir_x < 0
 
-	position = position.clamp(SPRITE_HALF, _screen_rect.size - SPRITE_HALF)
+	position.x = clampf(position.x, SPRITE_HALF.x, _screen_rect.size.x - SPRITE_HALF.x)
 
 func _do_react(mouse_pos: Vector2) -> void:
 	sprite.flip_h = mouse_pos.x < position.x
@@ -130,9 +128,8 @@ func _on_chat_response_received(_text: String) -> void:
 	_chat_locked = false
 
 func _pick_walk_direction() -> void:
-	var angle := randf_range(0.0, TAU)
-	_walk_direction = Vector2(cos(angle), sin(angle))
-	sprite.flip_h = _walk_direction.x < 0
+	_walk_dir_x = 1.0 if randf() > 0.5 else -1.0
+	sprite.flip_h = _walk_dir_x < 0
 
 # --- Micro-interactions ---
 
@@ -157,17 +154,6 @@ func _do_bounce() -> void:
 	tween.tween_property(sprite, "position:y", -10.0, 0.1)
 	tween.tween_property(sprite, "position:y", 0.0, 0.18)
 
-func _update_cursor_lean(delta: float, mouse_pos: Vector2) -> void:
-	var target_offset := Vector2.ZERO
-	var state: int = fsm.current_state
-	if state == CompanionFSM.State.IDLE or state == CompanionFSM.State.REACT:
-		var diff := mouse_pos - position
-		var dist := diff.length()
-		if dist > 0.0 and dist < CURSOR_LEAN_DISTANCE:
-			var strength := 1.0 - dist / CURSOR_LEAN_DISTANCE
-			target_offset = diff.normalized() * CURSOR_LEAN_MAX * strength
-	sprite.offset = sprite.offset.lerp(target_offset, 5.0 * delta)
-
 func _update_edge_lean(delta: float) -> void:
 	var target_rotation := 0.0
 	if fsm.current_state == CompanionFSM.State.IDLE:
@@ -176,6 +162,33 @@ func _update_edge_lean(delta: float) -> void:
 		elif position.x > _screen_rect.size.x - EDGE_LEAN_THRESHOLD:
 			target_rotation = 0.18
 	sprite.rotation = lerp(sprite.rotation, target_rotation, 4.0 * delta)
+
+# --- Real sprite loading ---
+
+func _load_sprite_frames() -> SpriteFrames:
+	var dir := OS.get_user_data_dir() + "/sprites"
+	if not FileAccess.file_exists(dir + "/idle_1.png"):
+		return null
+
+	var anim_files := {
+		"idle":  ["idle_1.png", "idle_2.png"],
+		"walk":  ["walk_1.png", "walk_2.png", "walk_3.png"],
+		"sleep": ["sleep_1.png", "sleep_2.png"],
+		"react": ["react_1.png", "react_2.png"],
+	}
+	var frames := SpriteFrames.new()
+	frames.remove_animation("default")
+
+	for anim_name: String in anim_files:
+		frames.add_animation(anim_name)
+		frames.set_animation_loop(anim_name, true)
+		frames.set_animation_speed(anim_name, 4.0)
+		for filename: String in anim_files[anim_name]:
+			var img := Image.load_from_file(dir + "/" + filename)
+			if img:
+				frames.add_frame(anim_name, ImageTexture.create_from_image(img))
+
+	return frames
 
 # --- Placeholder sprite generation ---
 
