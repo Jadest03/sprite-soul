@@ -243,16 +243,11 @@ def generate(args):
         from huggingface_hub import login
         login(token=hf_token, add_to_git_credential=False)
 
-    from diffusers import DiffusionPipeline, FluxImg2ImgPipeline
+    from diffusers import DiffusionPipeline
     pipe = DiffusionPipeline.from_pretrained(
         "black-forest-labs/FLUX.2-klein-4B",
         torch_dtype=dtype,
     )
-    if use_image_ref:
-        # Klein 모델은 T5/image_encoder 없음 — 클래스만 교체해 img2img 활성화
-        pipe.feature_extractor = None
-        pipe.image_encoder = None
-        pipe.__class__ = FluxImg2ImgPipeline
 
     pipe.load_lora_weights(
         "svntax-dev/pixel_spritesheet_4walk_small_lora_v1",
@@ -273,29 +268,21 @@ def generate(args):
 
     log(f"스프라이트 생성 시작 ({steps}스텝)")
 
+    ref_img = None
     if use_image_ref:
-        ref_img = Image.open(args.reference_image).convert("RGB").resize((512, 512), Image.LANCZOS)
-        result = pipe(
-            prompt=prompt,
-            image=ref_img,
-            strength=0.75,
-            num_inference_steps=steps,
-            guidance_scale=0.5,
-            generator=generator,
-            callback_on_step_end=on_step_end,
-            callback_on_step_end_tensor_inputs=["latents"],
-        ).images[0]
-    else:
-        result = pipe(
-            prompt=prompt,
-            num_inference_steps=steps,
-            guidance_scale=0.5,
-            height=512,
-            width=512,
-            generator=generator,
-            callback_on_step_end=on_step_end,
-            callback_on_step_end_tensor_inputs=["latents"],
-        ).images[0]
+        ref_img = Image.open(args.reference_image).convert("RGB")
+
+    result = pipe(
+        prompt=prompt,
+        image=ref_img,
+        num_inference_steps=steps,
+        guidance_scale=0.5,
+        height=512,
+        width=512,
+        generator=generator,
+        callback_on_step_end=on_step_end,
+        callback_on_step_end_tensor_inputs=["latents"],
+    ).images[0]
     log("이미지 생성 완료, 프레임 분리 중...")
 
     os.makedirs(args.output, exist_ok=True)
