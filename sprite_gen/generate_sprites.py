@@ -243,18 +243,16 @@ def generate(args):
         from huggingface_hub import login
         login(token=hf_token, add_to_git_credential=False)
 
+    from diffusers import DiffusionPipeline, FluxImg2ImgPipeline
+    pipe = DiffusionPipeline.from_pretrained(
+        "black-forest-labs/FLUX.2-klein-4B",
+        torch_dtype=dtype,
+    )
     if use_image_ref:
-        from diffusers import FluxImg2ImgPipeline
-        pipe = FluxImg2ImgPipeline.from_pretrained(
-            "black-forest-labs/FLUX.2-klein-4B",
-            torch_dtype=dtype,
-        )
-    else:
-        from diffusers import DiffusionPipeline
-        pipe = DiffusionPipeline.from_pretrained(
-            "black-forest-labs/FLUX.2-klein-4B",
-            torch_dtype=dtype,
-        )
+        # Klein 모델은 T5/image_encoder 없음 — 클래스만 교체해 img2img 활성화
+        pipe.feature_extractor = None
+        pipe.image_encoder = None
+        pipe.__class__ = FluxImg2ImgPipeline
 
     pipe.load_lora_weights(
         "svntax-dev/pixel_spritesheet_4walk_small_lora_v1",
@@ -276,7 +274,7 @@ def generate(args):
     log(f"스프라이트 생성 시작 ({steps}스텝)")
 
     if use_image_ref:
-        ref_img = Image.open(args.reference_image).convert("RGB").resize((512, 512), NEAREST)
+        ref_img = Image.open(args.reference_image).convert("RGB").resize((512, 512), Image.LANCZOS)
         result = pipe(
             prompt=prompt,
             image=ref_img,
