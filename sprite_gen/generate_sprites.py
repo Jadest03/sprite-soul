@@ -9,6 +9,7 @@ import os
 import sys
 import threading
 import time
+from collections import deque
 import numpy as np
 from PIL import Image
 
@@ -87,7 +88,6 @@ def tight_crop(img):
 
 def remove_white_bg(img):
     """테두리에서 BFS로 흰 배경(>235)만 투명 처리."""
-    from collections import deque
     rgba = img.convert("RGBA")
     arr = np.array(rgba).copy()
     h, w = arr.shape[:2]

@@ -42,8 +42,6 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if companion and _bubble.visible:
 		_update_bubble_position()
-	if _input_row.visible:
-		_update_input_position()
 
 	if _is_typing:
 		_typing_timer -= delta
@@ -185,6 +183,8 @@ func _on_ollama_error() -> void:
 
 func _set_input_visible(visible: bool) -> void:
 	EventBus.chat_input_open = visible
+	if visible:
+		_update_input_position()
 	_input_row.visible = visible
 	if not visible and _bubble.visible and not _is_typing and _hide_timer == 0.0:
 		_hide_timer = BUBBLE_HIDE_DELAY

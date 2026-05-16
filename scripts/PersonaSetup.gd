@@ -31,10 +31,29 @@ var _appearance_fields: Dictionary = {}
 var _appearance_field_nodes: Dictionary = {}
 var _gender_group: ButtonGroup
 
+# 버튼 스타일 캐시 — 토글 시마다 재생성하지 않도록
+var _style_normal: StyleBoxFlat
+var _style_selected: StyleBoxFlat
+
 const REQUIRED_APPEARANCE := ["gender", "skin", "hair_color", "hair_length", "hair_style", "eye_color", "top", "bottom"]
 
 func _ready() -> void:
+	_init_styles()
 	_build_ui()
+
+func _init_styles() -> void:
+	_style_normal = _make_flat_style(BTN_NORMAL, 6)
+	_style_selected = _make_flat_style(BTN_SELECTED, 6)
+
+func _make_flat_style(bg: Color, radius: int) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = bg
+	s.corner_radius_top_left     = radius
+	s.corner_radius_top_right    = radius
+	s.corner_radius_bottom_left  = radius
+	s.corner_radius_bottom_right = radius
+	s.set_content_margin_all(10)
+	return s
 
 func _build_ui() -> void:
 	var bg := ColorRect.new()
@@ -444,15 +463,12 @@ func _add_category_section(parent: VBoxContainer, category: Dictionary) -> void:
 		flow.add_child(btn)
 
 func _apply_btn_style(btn: Button, bg: Color, fg: Color) -> void:
-	for state in ["normal", "hover", "pressed", "focus", "disabled"]:
-		var s := StyleBoxFlat.new()
-		s.bg_color = bg.lightened(0.05) if state == "hover" else bg
-		s.corner_radius_top_left     = 6
-		s.corner_radius_top_right    = 6
-		s.corner_radius_bottom_left  = 6
-		s.corner_radius_bottom_right = 6
-		s.set_content_margin_all(10)
-		btn.add_theme_stylebox_override(state, s)
+	var is_selected := bg == BTN_SELECTED
+	var base := _style_selected if is_selected else _style_normal
+	for state in ["normal", "pressed", "focus", "disabled"]:
+		btn.add_theme_stylebox_override(state, base)
+	var hover := _make_flat_style(bg.lightened(0.05), 6)
+	btn.add_theme_stylebox_override("hover", hover)
 	btn.add_theme_color_override("font_color",         fg)
 	btn.add_theme_color_override("font_hover_color",   fg)
 	btn.add_theme_color_override("font_pressed_color", fg)
