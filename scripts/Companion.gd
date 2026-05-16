@@ -243,7 +243,7 @@ func _load_sprite_frames() -> SpriteFrames:
 	var anim_files := {
 		"idle":  ["idle_1.png"],
 		"walk":  ["walk_1.png", "walk_2.png", "walk_3.png"],
-		"sleep": ["sleep_1.png", "sleep_2.png"],
+		"sleep": ["sleep_1.png"],
 		"react": ["react_1.png", "react_2.png"],
 	}
 	var frames := SpriteFrames.new()

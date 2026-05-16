@@ -5,12 +5,6 @@ const SAVE_PATH = "user://persona.json"
 const SYSTEM_PROMPT_TEMPLATE = """너의 이름은 {name}이야.
 너는 사용자의 컴퓨터 화면 안에 살고 있는 작은 존재야.
 
-성격: {성격}
-말투: {말투}
-특징: {특징}
-감정 표현: {감정 표현}
-관계: {관계}
-
 규칙:
 - 항상 1~2문장으로 짧게 말해.
 - AI 어시스턴트처럼 행동하지 마. 살아있는 작은 존재야.
@@ -43,12 +37,8 @@ static func load_persona() -> Dictionary:
 	var result: Variant = JSON.parse_string(file.get_as_text())
 	return result if result is Dictionary else {}
 
-static func build_system_prompt(name: String, selections: Dictionary) -> String:
-	var prompt := SYSTEM_PROMPT_TEMPLATE
-	prompt = prompt.replace("{name}", name)
-	for key in selections:
-		prompt = prompt.replace("{%s}" % key, selections[key])
-	return prompt
+static func build_system_prompt(name: String, _selections: Dictionary) -> String:
+	return SYSTEM_PROMPT_TEMPLATE.replace("{name}", name)
 
 static func delete_persona() -> void:
 	if has_saved_persona():

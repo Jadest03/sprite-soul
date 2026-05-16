@@ -131,64 +131,117 @@ def split_frames(result, out_dir, frame_size=128, margin=8):
     ]
     col_bounds, row_bounds = detect_grid_valleys(result)
 
-    # 1패스: 타이트 크롭 + 최대 크기 파악
-    tight_frames = {}
-    max_w, max_h = 0, 0
-    for row_idx, row_names in enumerate(FRAME_NAMES):
-        for col_idx, name in enumerate(row_names):
-            x1 = col_bounds[col_idx]
-            y1 = row_bounds[row_idx]
-            x2 = result.width  if col_idx == 3 else col_bounds[col_idx + 1]
-            y2 = result.height if row_idx == 3 else row_bounds[row_idx + 1]
-            tc = tight_crop(result.crop((x1, y1, x2, y2)))
-            tight_frames[name] = tc
-            max_w = max(max_w, tc.width)
-            max_h = max(max_h, tc.height)
+    def _row_col_bounds(row_y1, row_y2, n=4, pad=5):
+        """특정 행의 밀도로 컬럼 경계를 독립 검출."""
+        strip = result.crop((0, row_y1, result.width, row_y2))
+        arr = np.array(strip.convert("RGB"))
+        den = (~((arr[:,:,0]>230)&(arr[:,:,1]>230)&(arr[:,:,2]>230))).sum(axis=0).astype(float)
+        nz = np.where(den > 2)[0]
+        if len(nz) == 0:
+            return col_bounds
+        start, end = int(nz[0]), int(nz[-1])
+        sw = (end - start) // n
+        bounds = [max(0, start - pad)]
+        for i in range(1, n):
+            c = start + i * sw
+            lo, hi = max(start, c - sw // 3), min(end, c + sw // 3)
+            bounds.append(lo + int(np.argmin(den[lo:hi])))
+        bounds.append(min(result.width, end + pad))
+        return bounds
 
-    # 2패스: 동일 캔버스 크기로 정규화 → frame_size 리사이즈 (투명 배경)
-    canvas_dim = max(max_w + margin * 2, max_h + margin * 2)
+    # walk_left 행은 4프레임이 고르게 분포 → 해당 행만의 밀도로 컬럼 경계 독립 검출
+    walk_left_col_bounds = _row_col_bounds(row_bounds[1], row_bounds[2])
+
+    def _smart_crop(img, density_threshold=0.04):
+        """컬럼/행 density 기반으로 아티팩트를 제외하고 주요 캐릭터 영역만 크롭."""
+        arr = np.array(img.convert("RGB"))
+        content = ~((arr[:, :, 0] > 230) & (arr[:, :, 1] > 230) & (arr[:, :, 2] > 230))
+        col_den = content.sum(axis=0) / max(content.shape[0], 1)
+        row_den = content.sum(axis=1) / max(content.shape[1], 1)
+        col_mask = col_den > density_threshold
+        row_mask = row_den > density_threshold
+        if not col_mask.any() or not row_mask.any():
+            return tight_crop(img)
+        x0, x1 = int(np.where(col_mask)[0][0]), int(np.where(col_mask)[0][-1])
+        y0, y1 = int(np.where(row_mask)[0][0]), int(np.where(row_mask)[0][-1])
+        return img.crop((x0, y0, x1 + 1, y1 + 1))
+
+    # 1패스: 스마트 크롭 (density 기반으로 고립된 아티팩트 제외)
+    # walk_left 행(row 1)은 독립 컬럼 경계 사용
+    ROW_COL_BOUNDS = {1: walk_left_col_bounds}
+    tight_frames = {}
+    for row_idx, row_names in enumerate(FRAME_NAMES):
+        cb = ROW_COL_BOUNDS.get(row_idx, col_bounds)
+        for col_idx, name in enumerate(row_names):
+            x1 = cb[col_idx]
+            y1 = row_bounds[row_idx]
+            x2 = result.width  if col_idx == 3 else cb[col_idx + 1]
+            y2 = result.height if row_idx == 3 else row_bounds[row_idx + 1]
+            tight_frames[name] = _smart_crop(result.crop((x1, y1, x2, y2)))
+
+    # 1.5패스: 스케일링 전 원본 기준으로 유효성 계산
+    # tight_crop은 RGB라 RGBA 변환 시 alpha=255 → remove_white_bg로 실제 불투명 픽셀 계산
+    def _is_empty_tight(tc, min_opaque=500) -> bool:
+        arr = np.array(remove_white_bg(tc))
+        return int((arr[:, :, 3] > 10).sum()) < min_opaque
+
+    empty_flags = {name: _is_empty_tight(tc) for name, tc in tight_frames.items()}
+    # walk_left가 walk_right보다 안정적으로 생성됨 → walk 기준 행으로 사용
+    # Companion.gd에서 flip_h로 방향 전환하므로 left 프레임으로도 동작
+    walk2_valid = not empty_flags["walk_left_2"]
+    walk3_valid = not empty_flags["walk_left_3"]
+
+    # 2패스: 캐릭터 높이 기준 정규화 → frame_size 정사각 캔버스 (투명 배경)
+    # 모든 서있는 프레임을 동일 높이로 스케일해 애니메이션 크기 일관성 확보
+    LYING_FRAMES = {"lying_down"}
+    target_char_h = int(frame_size * 0.82)
+
     raw_frames = {}
     for name, tc in tight_frames.items():
         tc_rgba = remove_white_bg(tc)
-        canvas = Image.new("RGBA", (canvas_dim, canvas_dim), (0, 0, 0, 0))
-        canvas.paste(tc_rgba, ((canvas_dim - tc.width) // 2, (canvas_dim - tc.height) // 2), mask=tc_rgba)
-        frame = canvas.resize((frame_size, frame_size), NEAREST)
-        raw_frames[name] = frame
-        frame.save(os.path.join(out_dir, f"frame_{name}.png"))
+        w, h = tc_rgba.size
 
-    # 3패스: 빈 프레임 감지 및 폴백
-    def _is_empty(frame: "Image.Image", min_opaque: int = 50) -> bool:
-        arr = np.array(frame)
-        return int((arr[:, :, 3] > 10).sum()) < min_opaque
+        if name not in LYING_FRAMES and h > 10:
+            # 높이 우선으로 스케일, 너비가 프레임을 초과하면 너비 기준으로 재조정
+            scale = min(target_char_h / h, (frame_size - margin) / max(w, 1))
+            new_w = max(1, int(w * scale))
+            new_h = max(1, int(h * scale))
+        else:
+            scale = (frame_size - margin * 2) / max(w, 1)
+            new_w = frame_size - margin * 2
+            new_h = max(1, int(h * scale))
 
-    # 폴백 이전에 유효성 기록 (폴백 후 체크하면 항상 valid로 보임)
-    walk2_valid = not _is_empty(raw_frames["walk_right_2"])
-    walk3_valid = not _is_empty(raw_frames["walk_right_3"])
+        tc_scaled = tc_rgba.resize((new_w, new_h), NEAREST)
+        canvas = Image.new("RGBA", (frame_size, frame_size), (0, 0, 0, 0))
+        paste_x = (frame_size - new_w) // 2
+        paste_y = frame_size - new_h - margin  # 바닥 정렬로 발 위치 일관성
+        canvas.paste(tc_scaled, (paste_x, max(0, paste_y)), mask=tc_scaled)
+        raw_frames[name] = canvas
+        canvas.save(os.path.join(out_dir, f"frame_{name}.png"))
 
+    # 3패스: 빈 프레임 폴백 (empty_flags 재사용)
     for row_names in FRAME_NAMES:
-        fallback = next((raw_frames[n] for n in row_names if not _is_empty(raw_frames[n])), None)
+        fallback = next((raw_frames[n] for n in row_names if not empty_flags[n]), None)
         if fallback is None:
             continue
         for name in row_names:
-            if _is_empty(raw_frames[name]):
+            if empty_flags[name]:
                 raw_frames[name] = fallback.copy()
                 fallback.copy().save(os.path.join(out_dir, f"frame_{name}.png"))
 
     # 4패스: 유효 프레임에 따라 ANIM_MAP 동적 결정
 
     if walk2_valid and walk3_valid:
-        # 16프레임: 3포즈 walk 사이클
-        walk_2_src, walk_3_src = "walk_right_2", "walk_right_3"
+        walk_2_src, walk_3_src = "walk_left_2", "walk_left_3"
     elif walk2_valid:
-        walk_2_src, walk_3_src = "walk_right_2", "jump_right"
+        walk_2_src, walk_3_src = "walk_left_2", "jump_left"
     else:
-        # 8프레임: walk_right_1 ↔ jump_right 교차 사이클
-        walk_2_src, walk_3_src = "jump_right", "walk_right_1"
+        walk_2_src, walk_3_src = "jump_left", "walk_left_1"
 
     ANIM_MAP = {
         "idle_1":  "walk_down_1",
         "idle_2":  "arms_raised",
-        "walk_1":  "walk_right_1",
+        "walk_1":  "walk_left_1",
         "walk_2":  walk_2_src,
         "walk_3":  walk_3_src,
         "sleep_1": "lying_down",
@@ -198,8 +251,14 @@ def split_frames(result, out_dir, frame_size=128, margin=8):
     }
 
     # Godot 애니메이션 파일 저장
+    # walk 프레임은 walk_left 기반이라 오른쪽을 향하도록 미러링
+    # (Godot에서 flip_h로 방향 전환 시 left=flip, right=no-flip이 맞아야 함)
+    WALK_ANIM = {"walk_1", "walk_2", "walk_3"}
     for anim_name, src in ANIM_MAP.items():
-        raw_frames[src].copy().save(os.path.join(out_dir, f"{anim_name}.png"))
+        frame = raw_frames[src].copy()
+        if anim_name in WALK_ANIM:
+            frame = frame.transpose(Image.FLIP_LEFT_RIGHT)
+        frame.save(os.path.join(out_dir, f"{anim_name}.png"))
 
     return raw_frames
 

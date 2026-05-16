@@ -1,6 +1,5 @@
 extends Node
 
-const PersonaData = preload("res://scripts/PersonaData.gd")
 const PersonaGenerator = preload("res://scripts/PersonaGenerator.gd")
 const UserProfile = preload("res://scripts/UserProfile.gd")
 
@@ -25,20 +24,13 @@ const CONFIRM_H    := 80
 var _name_field: LineEdit
 var _hf_token_field: LineEdit
 var _user_name_field: LineEdit
-var _selections: Dictionary = {}
 var _confirm_btn: Button
-var _appearance_fields: Dictionary = {}
-var _appearance_field_nodes: Dictionary = {}
-var _gender_group: ButtonGroup
 var _reference_image_path: String = ""
 var _ref_preview: TextureRect
 var _char_hints_field: LineEdit
 
-# 버튼 스타일 캐시 — 토글 시마다 재생성하지 않도록
 var _style_normal: StyleBoxFlat
 var _style_selected: StyleBoxFlat
-
-const REQUIRED_APPEARANCE := ["gender", "skin", "hair_color", "hair_length", "hair_style", "eye_color", "top", "bottom"]
 
 func _ready() -> void:
 	_init_styles()
@@ -84,11 +76,8 @@ func _build_ui() -> void:
 	_add_title(vbox)
 	_add_name_section(vbox)
 	_add_reference_image_section(vbox)
-	_add_appearance_section(vbox)
 	_add_hf_token_section(vbox)
 	_add_user_name_section(vbox)
-	for category in PersonaData.CATEGORIES:
-		_add_category_section(vbox, category)
 
 	# 하단 고정 완성 버튼
 	var btn_container := PanelContainer.new()
@@ -224,7 +213,7 @@ func _add_title(parent: VBoxContainer) -> void:
 	parent.add_child(title)
 
 	var sub := Label.new()
-	sub.text = "각 항목에서 하나씩 선택해줘"
+	sub.text = "이미지와 이름만 있으면 돼"
 	sub.add_theme_font_size_override("font_size", FONT_SUB)
 	sub.add_theme_color_override("font_color", MUTED_COLOR)
 	parent.add_child(sub)
@@ -269,301 +258,6 @@ func _add_name_section(parent: VBoxContainer) -> void:
 	_name_field.add_theme_stylebox_override("read_only", empty)
 	pm.add_child(_name_field)
 
-func _add_appearance_section(parent: VBoxContainer) -> void:
-	var sep := HSeparator.new()
-	sep.add_theme_color_override("color", Color(0.2, 0.2, 0.25))
-	parent.add_child(sep)
-
-	var label := Label.new()
-	label.text = "외모"
-	label.add_theme_font_size_override("font_size", FONT_LABEL)
-	label.add_theme_color_override("font_color", TEXT_COLOR)
-	parent.add_child(label)
-
-	var hint := Label.new()
-	hint.text = "입력한 정보로 스프라이트를 자동 생성해요  (* 필수)"
-	hint.add_theme_font_size_override("font_size", FONT_SUB)
-	hint.add_theme_color_override("font_color", MUTED_COLOR)
-	parent.add_child(hint)
-
-	# Gender buttons
-	var gender_lbl := Label.new()
-	gender_lbl.text = "성별 *"
-	gender_lbl.add_theme_font_size_override("font_size", FONT_BTN)
-	gender_lbl.add_theme_color_override("font_color", MUTED_COLOR)
-	parent.add_child(gender_lbl)
-
-	var gender_row := HBoxContainer.new()
-	gender_row.add_theme_constant_override("separation", 8)
-	parent.add_child(gender_row)
-
-	_gender_group = ButtonGroup.new()
-	for pair in [["여자", "female"], ["남자", "male"]]:
-		var btn := Button.new()
-		btn.text = pair[0]
-		btn.toggle_mode = true
-		btn.button_group = _gender_group
-		btn.add_theme_font_size_override("font_size", FONT_BTN)
-		btn.custom_minimum_size = Vector2(88, BTN_HEIGHT)
-		_apply_btn_style(btn, BTN_NORMAL, MUTED_COLOR)
-		var val: String = pair[1]
-		btn.toggled.connect(func(on: bool):
-			if on:
-				_apply_btn_style(btn, BTN_SELECTED, Color(1, 1, 1))
-				_appearance_fields["gender"] = val
-			else:
-				_apply_btn_style(btn, BTN_NORMAL, MUTED_COLOR)
-		)
-		gender_row.add_child(btn)
-
-	# Required fields
-	_add_appearance_field(parent, "피부색 *",     "skin",        "fair / light / medium / tan / dark")
-	_add_appearance_field(parent, "머리 색 *",    "hair_color",  "black / blonde / brown / red / white / pink")
-	_add_appearance_field(parent, "머리 길이 *",  "hair_length", "short / medium / long")
-	_add_appearance_field(parent, "머리 스타일 *","hair_style",  "straight / curly / ponytail / twin tails / braided")
-	_add_appearance_field(parent, "눈 색 *",      "eye_color",   "brown / blue / green / red / purple / black")
-	_add_appearance_field(parent, "상의 *",       "top",         "white shirt / blue hoodie / black jacket")
-	_add_appearance_field(parent, "하의 *",       "bottom",      "jeans / skirt / shorts / dress")
-
-	# Optional fields
-	_add_appearance_field(parent, "신발",   "shoes",     "sneakers / boots / sandals")
-	_add_appearance_field(parent, "모자",   "hat",       "baseball cap / beanie / bow")
-	_add_appearance_field(parent, "악세서리","accessory", "glasses / scarf / bag")
-	_add_appearance_field(parent, "분위기", "vibe",      "cute / cool / casual / sporty / elegant")
-
-func _add_appearance_field(parent: VBoxContainer, label_text: String, key: String, placeholder: String) -> void:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	parent.add_child(row)
-
-	var lbl := Label.new()
-	lbl.text = label_text
-	lbl.add_theme_font_size_override("font_size", FONT_BTN)
-	lbl.add_theme_color_override("font_color", MUTED_COLOR)
-	lbl.custom_minimum_size = Vector2(96, 0)
-	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	row.add_child(lbl)
-
-	var panel := PanelContainer.new()
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = BTN_NORMAL
-	ps.corner_radius_top_left     = 6
-	ps.corner_radius_top_right    = 6
-	ps.corner_radius_bottom_left  = 6
-	ps.corner_radius_bottom_right = 6
-	ps.set_content_margin_all(0)
-	panel.add_theme_stylebox_override("panel", ps)
-	row.add_child(panel)
-
-	var pm := MarginContainer.new()
-	pm.add_theme_constant_override("margin_left",  10)
-	pm.add_theme_constant_override("margin_right", 10)
-	pm.add_theme_constant_override("margin_top",    6)
-	pm.add_theme_constant_override("margin_bottom", 6)
-	panel.add_child(pm)
-
-	var field := LineEdit.new()
-	field.placeholder_text = placeholder
-	field.add_theme_font_size_override("font_size", FONT_BTN)
-	field.add_theme_color_override("font_color", TEXT_COLOR)
-	field.add_theme_color_override("font_placeholder_color", MUTED_COLOR)
-	var empty := StyleBoxEmpty.new()
-	field.add_theme_stylebox_override("normal",    empty)
-	field.add_theme_stylebox_override("focus",     empty)
-	field.add_theme_stylebox_override("read_only", empty)
-	field.text_changed.connect(func(text: String):
-		var trimmed := text.strip_edges()
-		if trimmed.is_empty():
-			_appearance_fields.erase(key)
-		else:
-			_appearance_fields[key] = trimmed
-	)
-	pm.add_child(field)
-	_appearance_field_nodes[key] = field
-
-func _build_appearance_string() -> String:
-	var gender: String = _appearance_fields.get("gender", "female")
-	var skin: String = _appearance_fields.get("skin", "")
-	var hair_color: String = _appearance_fields.get("hair_color", "")
-	var hair_length: String = _appearance_fields.get("hair_length", "")
-	var hair_style: String = _appearance_fields.get("hair_style", "")
-	var eye_color: String = _appearance_fields.get("eye_color", "")
-	var top: String = _appearance_fields.get("top", "")
-	var bottom: String = _appearance_fields.get("bottom", "")
-	var shoes: String = _appearance_fields.get("shoes", "")
-	var hat: String = _appearance_fields.get("hat", "")
-	var accessory: String = _appearance_fields.get("accessory", "")
-	var vibe: String = _appearance_fields.get("vibe", "")
-
-	var parts: Array[String] = []
-	parts.append(gender)
-	if not skin.is_empty():
-		parts.append("with %s skin" % skin)
-
-	var hair_parts: Array[String] = []
-	if not hair_color.is_empty(): hair_parts.append(hair_color)
-	if not hair_length.is_empty(): hair_parts.append(hair_length)
-	if not hair_style.is_empty(): hair_parts.append(hair_style)
-	if not hair_parts.is_empty():
-		parts.append("%s hair" % " ".join(hair_parts))
-
-	if not eye_color.is_empty():
-		parts.append("%s eyes" % eye_color)
-
-	var wearing: Array[String] = []
-	if not top.is_empty(): wearing.append(top)
-	if not bottom.is_empty(): wearing.append(bottom)
-	if not shoes.is_empty(): wearing.append(shoes)
-	if not hat.is_empty(): wearing.append(hat)
-	if not wearing.is_empty():
-		parts.append("wearing %s" % ", ".join(wearing))
-
-	if not accessory.is_empty():
-		parts.append("with %s" % accessory)
-	if not vibe.is_empty():
-		parts.append(vibe + " style")
-
-	return ", ".join(parts)
-
-func _add_hf_token_section(parent: VBoxContainer) -> void:
-	var sep := HSeparator.new()
-	sep.add_theme_color_override("color", Color(0.2, 0.2, 0.25))
-	parent.add_child(sep)
-
-	var label := Label.new()
-	label.text = "HuggingFace 토큰"
-	label.add_theme_font_size_override("font_size", FONT_LABEL)
-	label.add_theme_color_override("font_color", TEXT_COLOR)
-	parent.add_child(label)
-
-	var hint := Label.new()
-	hint.text = "huggingface.co/settings/tokens 에서 발급 (최초 1회만 입력)"
-	hint.add_theme_font_size_override("font_size", FONT_SUB)
-	hint.add_theme_color_override("font_color", MUTED_COLOR)
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD
-	parent.add_child(hint)
-
-	var panel := PanelContainer.new()
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = BTN_NORMAL
-	ps.corner_radius_top_left     = 8
-	ps.corner_radius_top_right    = 8
-	ps.corner_radius_bottom_left  = 8
-	ps.corner_radius_bottom_right = 8
-	ps.set_content_margin_all(0)
-	panel.add_theme_stylebox_override("panel", ps)
-	parent.add_child(panel)
-
-	var pm := MarginContainer.new()
-	pm.add_theme_constant_override("margin_left",   12)
-	pm.add_theme_constant_override("margin_right",  12)
-	pm.add_theme_constant_override("margin_top",     8)
-	pm.add_theme_constant_override("margin_bottom",  8)
-	panel.add_child(pm)
-
-	_hf_token_field = LineEdit.new()
-	_hf_token_field.placeholder_text = "hf_..."
-	_hf_token_field.secret = true
-	_hf_token_field.add_theme_font_size_override("font_size", FONT_INPUT)
-	_hf_token_field.add_theme_color_override("font_color", TEXT_COLOR)
-	_hf_token_field.add_theme_color_override("font_placeholder_color", MUTED_COLOR)
-	var empty := StyleBoxEmpty.new()
-	_hf_token_field.add_theme_stylebox_override("normal",    empty)
-	_hf_token_field.add_theme_stylebox_override("focus",     empty)
-	_hf_token_field.add_theme_stylebox_override("read_only", empty)
-	# 저장된 토큰이 있으면 미리 채워두기
-	var saved := _load_saved_token()
-	if not saved.is_empty():
-		_hf_token_field.text = saved
-	pm.add_child(_hf_token_field)
-
-func _load_saved_token() -> String:
-	const TOKEN_PATH = "user://hf_token.txt"
-	if not FileAccess.file_exists(TOKEN_PATH):
-		return OS.get_environment("HF_TOKEN")
-	var f := FileAccess.open(TOKEN_PATH, FileAccess.READ)
-	return f.get_as_text().strip_edges() if f else ""
-
-func _add_user_name_section(parent: VBoxContainer) -> void:
-	var sep := HSeparator.new()
-	sep.add_theme_color_override("color", Color(0.2, 0.2, 0.25))
-	parent.add_child(sep)
-
-	var label := Label.new()
-	label.text = "내 이름 (선택)"
-	label.add_theme_font_size_override("font_size", FONT_LABEL)
-	label.add_theme_color_override("font_color", TEXT_COLOR)
-	parent.add_child(label)
-
-	var panel := PanelContainer.new()
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = BTN_NORMAL
-	ps.corner_radius_top_left     = 8
-	ps.corner_radius_top_right    = 8
-	ps.corner_radius_bottom_left  = 8
-	ps.corner_radius_bottom_right = 8
-	ps.set_content_margin_all(0)
-	panel.add_theme_stylebox_override("panel", ps)
-	parent.add_child(panel)
-
-	var pm := MarginContainer.new()
-	pm.add_theme_constant_override("margin_left",   12)
-	pm.add_theme_constant_override("margin_right",  12)
-	pm.add_theme_constant_override("margin_top",     8)
-	pm.add_theme_constant_override("margin_bottom",  8)
-	panel.add_child(pm)
-
-	_user_name_field = LineEdit.new()
-	_user_name_field.placeholder_text = "캐릭터가 나를 부를 이름"
-	_user_name_field.add_theme_font_size_override("font_size", FONT_INPUT)
-	_user_name_field.add_theme_color_override("font_color", TEXT_COLOR)
-	_user_name_field.add_theme_color_override("font_placeholder_color", MUTED_COLOR)
-	var empty := StyleBoxEmpty.new()
-	_user_name_field.add_theme_stylebox_override("normal",    empty)
-	_user_name_field.add_theme_stylebox_override("focus",     empty)
-	_user_name_field.add_theme_stylebox_override("read_only", empty)
-	pm.add_child(_user_name_field)
-
-func _add_category_section(parent: VBoxContainer, category: Dictionary) -> void:
-	var key: String = category["key"]
-	var options: Array = category["options"]
-
-	var sep := HSeparator.new()
-	sep.add_theme_color_override("color", Color(0.2, 0.2, 0.25))
-	parent.add_child(sep)
-
-	var label := Label.new()
-	label.text = key
-	label.add_theme_font_size_override("font_size", FONT_LABEL)
-	label.add_theme_color_override("font_color", TEXT_COLOR)
-	parent.add_child(label)
-
-	var flow := FlowContainer.new()
-	flow.add_theme_constant_override("h_separation", 8)
-	flow.add_theme_constant_override("v_separation", 8)
-	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	parent.add_child(flow)
-
-	var group := ButtonGroup.new()
-	for opt in options:
-		var btn := Button.new()
-		btn.text = opt["label"]
-		btn.toggle_mode = true
-		btn.button_group = group
-		btn.add_theme_font_size_override("font_size", FONT_BTN)
-		btn.custom_minimum_size = Vector2(0, BTN_HEIGHT)
-		_apply_btn_style(btn, BTN_NORMAL, MUTED_COLOR)
-		btn.toggled.connect(func(on: bool):
-			if on:
-				_apply_btn_style(btn, BTN_SELECTED, Color(1, 1, 1))
-				_selections[key] = opt["prompt"]
-			else:
-				_apply_btn_style(btn, BTN_NORMAL, MUTED_COLOR)
-		)
-		flow.add_child(btn)
-
 func _apply_btn_style(btn: Button, bg: Color, fg: Color) -> void:
 	var is_selected := bg == BTN_SELECTED
 	var base := _style_selected if is_selected else _style_normal
@@ -581,17 +275,9 @@ func _on_confirm_pressed() -> void:
 	if name.is_empty():
 		_shake(_name_field)
 		return
-	if _selections.size() < PersonaData.CATEGORIES.size():
+	if _reference_image_path.is_empty():
 		_shake(_confirm_btn)
 		return
-	if _reference_image_path.is_empty():
-		for key in REQUIRED_APPEARANCE:
-			if not _appearance_fields.has(key):
-				if _appearance_field_nodes.has(key):
-					_shake(_appearance_field_nodes[key])
-				else:
-					_shake(_confirm_btn)
-				return
 	var hf_token := _hf_token_field.text.strip_edges()
 	if hf_token.is_empty():
 		_shake(_hf_token_field)
@@ -599,9 +285,8 @@ func _on_confirm_pressed() -> void:
 	var tf := FileAccess.open("user://hf_token.txt", FileAccess.WRITE)
 	if tf:
 		tf.store_string(hf_token)
-	var hints := _char_hints_field.text.strip_edges() if _char_hints_field else ""
-	var appearance := hints if not _reference_image_path.is_empty() else _build_appearance_string()
-	PersonaGenerator.save_persona(name, _selections, appearance)
+	var appearance := _char_hints_field.text.strip_edges() if _char_hints_field else ""
+	PersonaGenerator.save_persona(name, {}, appearance)
 	var user_name := _user_name_field.text.strip_edges()
 	if not user_name.is_empty():
 		var profile := UserProfile.new()
