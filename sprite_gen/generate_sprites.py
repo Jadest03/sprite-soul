@@ -126,14 +126,16 @@ def split_frames(result, out_dir, frame_size=128, margin=8):
         ["walk_right_1", "walk_right_2", "walk_right_3", "jump_right"],
         ["walk_back_1", "walk_back_2", "walk_back_3", "lying_down"],
     ]
+    # col 0과 col 3은 항상 생성됨. col 1,2는 모델에 따라 비어있을 수 있음.
+    # walk_3는 col 3(jump_right)을 사용해 최소 2프레임 walk 애니메이션 보장.
     ANIM_MAP = {
         "idle_1":  "walk_down_1",
         "idle_2":  "arms_raised",
         "walk_1":  "walk_right_1",
         "walk_2":  "walk_right_2",
-        "walk_3":  "walk_right_3",
+        "walk_3":  "jump_right",
         "sleep_1": "lying_down",
-        "sleep_2": "lying_down",
+        "sleep_2": "walk_back_1",
         "react_1": "arms_raised",
         "react_2": "walk_down_1",
     }
