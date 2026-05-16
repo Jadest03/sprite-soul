@@ -32,9 +32,11 @@ def log(msg):
 
 def detect_device():
     import torch
+    import os
     if torch.cuda.is_available():
         return "cuda", torch.bfloat16
     elif torch.backends.mps.is_available():
+        os.environ.setdefault("PYTORCH_MPS_HIGH_WATERMARK_RATIO", "0.0")
         return "mps", torch.float16
     else:
         return "cpu", torch.float32
