@@ -549,13 +549,14 @@ func _on_confirm_pressed() -> void:
 	if _selections.size() < PersonaData.CATEGORIES.size():
 		_shake(_confirm_btn)
 		return
-	for key in REQUIRED_APPEARANCE:
-		if not _appearance_fields.has(key):
-			if _appearance_field_nodes.has(key):
-				_shake(_appearance_field_nodes[key])
-			else:
-				_shake(_confirm_btn)
-			return
+	if _reference_image_path.is_empty():
+		for key in REQUIRED_APPEARANCE:
+			if not _appearance_fields.has(key):
+				if _appearance_field_nodes.has(key):
+					_shake(_appearance_field_nodes[key])
+				else:
+					_shake(_confirm_btn)
+				return
 	var hf_token := _hf_token_field.text.strip_edges()
 	if hf_token.is_empty():
 		_shake(_hf_token_field)
@@ -563,7 +564,7 @@ func _on_confirm_pressed() -> void:
 	var tf := FileAccess.open("user://hf_token.txt", FileAccess.WRITE)
 	if tf:
 		tf.store_string(hf_token)
-	var appearance := _build_appearance_string()
+	var appearance := "" if not _reference_image_path.is_empty() else _build_appearance_string()
 	PersonaGenerator.save_persona(name, _selections, appearance)
 	var user_name := _user_name_field.text.strip_edges()
 	if not user_name.is_empty():
