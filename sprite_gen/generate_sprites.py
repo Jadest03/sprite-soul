@@ -57,7 +57,7 @@ def build_prompt(character: str, use_image_ref: bool = False) -> str:
         "second row is 3 walking frames facing left and 1 frame jumping left, "
         "third row is 3 walking frames facing right and 1 frame jumping right, "
         "fourth row is 3 walking frames back view facing up and 1 frame lying on floor. "
-        "white background between frames, chibi style, retro RPG game sprite."
+        "full body visible including feet, white background between frames, chibi style, retro RPG game sprite."
     )
 
 
