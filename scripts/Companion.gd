@@ -254,7 +254,10 @@ func _load_sprite_frames() -> SpriteFrames:
 		frames.set_animation_loop(anim_name, true)
 		frames.set_animation_speed(anim_name, 4.0)
 		for filename: String in anim_files[anim_name]:
-			var img := Image.load_from_file(dir + "/" + filename)
+			var path := dir + "/" + filename
+			if FileAccess.get_file_as_bytes(path).size() < 500:
+				continue
+			var img := Image.load_from_file(path)
 			if img:
 				frames.add_frame(anim_name, ImageTexture.create_from_image(img))
 
