@@ -32,6 +32,7 @@ var _appearance_field_nodes: Dictionary = {}
 var _gender_group: ButtonGroup
 var _reference_image_path: String = ""
 var _ref_preview: TextureRect
+var _char_hints_field: LineEdit
 
 # 버튼 스타일 캐시 — 토글 시마다 재생성하지 않도록
 var _style_normal: StyleBoxFlat
@@ -180,6 +181,40 @@ func _add_reference_image_section(parent: VBoxContainer) -> void:
 	row.add_child(pick_btn)
 	row.add_child(path_label)
 	row.add_child(_ref_preview)
+
+	# 선택적 특징 힌트 필드
+	var hints_label := Label.new()
+	hints_label.text = "특징 힌트 (선택) — 이미지로 잡기 어려운 디테일을 영어로 적어주세요"
+	hints_label.add_theme_font_size_override("font_size", FONT_SUB)
+	hints_label.add_theme_color_override("font_color", MUTED_COLOR)
+	parent.add_child(hints_label)
+
+	var hints_panel := PanelContainer.new()
+	var hints_style := StyleBoxFlat.new()
+	hints_style.bg_color = BTN_NORMAL
+	hints_style.corner_radius_top_left     = 8
+	hints_style.corner_radius_top_right    = 8
+	hints_style.corner_radius_bottom_left  = 8
+	hints_style.corner_radius_bottom_right = 8
+	hints_panel.add_theme_stylebox_override("panel", hints_style)
+	parent.add_child(hints_panel)
+
+	var hints_margin := MarginContainer.new()
+	hints_margin.add_theme_constant_override("margin_left",  10)
+	hints_margin.add_theme_constant_override("margin_right", 10)
+	hints_margin.add_theme_constant_override("margin_top",    6)
+	hints_margin.add_theme_constant_override("margin_bottom", 6)
+	hints_panel.add_child(hints_margin)
+
+	_char_hints_field = LineEdit.new()
+	_char_hints_field.placeholder_text = "예: white spiky hair, black blindfold, dark suit"
+	_char_hints_field.add_theme_font_size_override("font_size", FONT_BTN)
+	_char_hints_field.add_theme_color_override("font_color", TEXT_COLOR)
+	_char_hints_field.add_theme_color_override("font_placeholder_color", MUTED_COLOR)
+	var empty := StyleBoxEmpty.new()
+	_char_hints_field.add_theme_stylebox_override("normal", empty)
+	_char_hints_field.add_theme_stylebox_override("focus",  empty)
+	hints_margin.add_child(_char_hints_field)
 
 func _add_title(parent: VBoxContainer) -> void:
 	var title := Label.new()
@@ -564,7 +599,8 @@ func _on_confirm_pressed() -> void:
 	var tf := FileAccess.open("user://hf_token.txt", FileAccess.WRITE)
 	if tf:
 		tf.store_string(hf_token)
-	var appearance := "" if not _reference_image_path.is_empty() else _build_appearance_string()
+	var hints := _char_hints_field.text.strip_edges() if _char_hints_field else ""
+	var appearance := hints if not _reference_image_path.is_empty() else _build_appearance_string()
 	PersonaGenerator.save_persona(name, _selections, appearance)
 	var user_name := _user_name_field.text.strip_edges()
 	if not user_name.is_empty():

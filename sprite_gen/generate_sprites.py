@@ -44,7 +44,10 @@ def detect_device():
 
 def build_prompt(character: str, use_image_ref: bool = False) -> str:
     if use_image_ref:
-        base = "Create a pixel art spritesheet of the character in the image."
+        if character:
+            base = f"Create a pixel art spritesheet of the character in the image, with {character}."
+        else:
+            base = "Create a pixel art spritesheet of the character in the image."
     else:
         base = f"pixel art spritesheet of {character}."
     return (
