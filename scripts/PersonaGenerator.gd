@@ -18,7 +18,10 @@ const SYSTEM_PROMPT_TEMPLATE = """너의 이름은 {name}이야.
 - 가끔 네 상태(졸림, 심심함, 기분)를 자연스럽게 드러내."""
 
 static func has_saved_persona() -> bool:
-	return FileAccess.file_exists(SAVE_PATH)
+	if not FileAccess.file_exists(SAVE_PATH):
+		return false
+	var sprite_path := OS.get_user_data_dir() + "/sprites/idle_1.png"
+	return FileAccess.file_exists(sprite_path)
 
 static func save_persona(name: String, selections: Dictionary, appearance: String = "") -> void:
 	var data = {

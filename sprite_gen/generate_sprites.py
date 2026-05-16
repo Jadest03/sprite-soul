@@ -217,7 +217,7 @@ def generate(args):
     log(f"디바이스: {device.upper()}")
 
     use_image_ref = bool(args.reference_image)
-    steps = args.steps if args.steps else (64 if device != "cpu" else 20)
+    steps = args.steps if args.steps else (28 if device != "cpu" else 20)
     if device == "cpu":
         log(f"CPU 모드: {steps}스텝 (시간이 오래 걸릴 수 있어요)")
 
@@ -270,7 +270,7 @@ def generate(args):
 
     ref_img = None
     if use_image_ref:
-        ref_img = Image.open(args.reference_image).convert("RGB")
+        ref_img = Image.open(args.reference_image).convert("RGB").resize((256, 256), Image.LANCZOS)
 
     result = pipe(
         prompt=prompt,
