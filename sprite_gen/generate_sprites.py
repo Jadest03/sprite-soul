@@ -126,20 +126,6 @@ def split_frames(result, out_dir, frame_size=128, margin=8):
         ["walk_right_1", "walk_right_2", "walk_right_3", "jump_right"],
         ["walk_back_1", "walk_back_2", "walk_back_3", "lying_down"],
     ]
-    # col 0과 col 3은 항상 생성됨. col 1,2는 모델에 따라 비어있을 수 있음.
-    # walk_3는 col 3(jump_right)을 사용해 최소 2프레임 walk 애니메이션 보장.
-    ANIM_MAP = {
-        "idle_1":  "walk_down_1",
-        "idle_2":  "arms_raised",
-        "walk_1":  "walk_right_1",
-        "walk_2":  "walk_right_2",
-        "walk_3":  "jump_right",
-        "sleep_1": "lying_down",
-        "sleep_2": "walk_back_1",
-        "react_1": "arms_raised",
-        "react_2": "walk_down_1",
-    }
-
     col_bounds, row_bounds = detect_grid_valleys(result)
 
     # 1패스: 타이트 크롭 + 최대 크기 파악
@@ -167,7 +153,7 @@ def split_frames(result, out_dir, frame_size=128, margin=8):
         raw_frames[name] = frame
         frame.save(os.path.join(out_dir, f"frame_{name}.png"))
 
-    # 3패스: 빈 프레임(불투명 픽셀 부족) → 같은 행의 첫 유효 프레임으로 대체
+    # 3패스: 빈 프레임 감지 및 폴백
     def _is_empty(frame: "Image.Image", min_opaque: int = 50) -> bool:
         arr = np.array(frame)
         return int((arr[:, :, 3] > 10).sum()) < min_opaque
@@ -180,6 +166,22 @@ def split_frames(result, out_dir, frame_size=128, margin=8):
             if _is_empty(raw_frames[name]):
                 raw_frames[name] = fallback.copy()
                 fallback.copy().save(os.path.join(out_dir, f"frame_{name}.png"))
+
+    # 4패스: walk_right_2/3 유효 여부에 따라 ANIM_MAP 결정
+    # 16프레임 모두 생성된 경우: walk_1→walk_right_1, walk_2→walk_right_2, walk_3→walk_right_3
+    # 8프레임만 생성된 경우(col 1,2 빈칸): walk_3→jump_right로 2포즈 사이클 확보
+    walk_right_3_valid = not _is_empty(raw_frames["walk_right_3"])
+    ANIM_MAP = {
+        "idle_1":  "walk_down_1",
+        "idle_2":  "arms_raised",
+        "walk_1":  "walk_right_1",
+        "walk_2":  "walk_right_2",
+        "walk_3":  "walk_right_3" if walk_right_3_valid else "jump_right",
+        "sleep_1": "lying_down",
+        "sleep_2": "walk_back_1",
+        "react_1": "arms_raised",
+        "react_2": "walk_down_1",
+    }
 
     # Godot 애니메이션 파일 저장
     for anim_name, src in ANIM_MAP.items():
