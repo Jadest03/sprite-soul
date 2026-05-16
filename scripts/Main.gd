@@ -6,7 +6,7 @@ const PersonaSetupScene = preload("res://scenes/PersonaSetup.tscn")
 const PersonaGenerator  = preload("res://scripts/PersonaGenerator.gd")
 const SpriteGenerator   = preload("res://scripts/SpriteGenerator.gd")
 
-const COMPANION_AREA := Vector2i(300, 200)
+const COMPANION_AREA := Vector2i(300, 330)
 const SETUP_AREA     := Vector2i(520, 860)
 
 var _generator: Node

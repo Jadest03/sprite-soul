@@ -42,6 +42,8 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if companion and _bubble.visible:
 		_update_bubble_position()
+	if _input_row.visible:
+		_update_input_position()
 
 	if _is_typing:
 		_typing_timer -= delta
@@ -59,11 +61,15 @@ func _process(delta: float) -> void:
 		if _hide_timer <= 0.0:
 			_bubble.hide()
 
+func _update_input_position() -> void:
+	var vh := get_viewport().get_visible_rect().size.y
+	_input_row.position = Vector2(4.0, vh - _input_row.size.y - 4.0)
+
 func _update_bubble_position() -> void:
 	var pos := companion.position
 	var bsize := _bubble.size
 	var x := clampf(pos.x - bsize.x * 0.5, 4.0, 296.0 - bsize.x)
-	var y := maxf(4.0, pos.y - 108.0 - bsize.y)
+	var y := maxf(4.0, pos.y - 120.0 - bsize.y)
 	_bubble.position = Vector2(x, y)
 
 func _on_companion_clicked() -> void:
@@ -180,6 +186,8 @@ func _on_ollama_error() -> void:
 func _set_input_visible(visible: bool) -> void:
 	EventBus.chat_input_open = visible
 	_input_row.visible = visible
+	if not visible and _bubble.visible and not _is_typing and _hide_timer == 0.0:
+		_hide_timer = BUBBLE_HIDE_DELAY
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
@@ -190,37 +198,36 @@ func _input(event: InputEvent) -> void:
 
 func _build_bubble() -> void:
 	_bubble = PanelContainer.new()
-	_bubble.custom_minimum_size = Vector2(120, 0)
+	_bubble.custom_minimum_size = Vector2(160, 0)
 	_bubble.hide()
 	add_child(_bubble)
 
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.08, 0.08, 0.12, 0.90)
-	style.corner_radius_top_left    = 8
-	style.corner_radius_top_right   = 8
-	style.corner_radius_bottom_left = 8
-	style.corner_radius_bottom_right = 8
+	style.corner_radius_top_left    = 10
+	style.corner_radius_top_right   = 10
+	style.corner_radius_bottom_left = 10
+	style.corner_radius_bottom_right = 10
 	style.set_content_margin_all(0)
 	_bubble.add_theme_stylebox_override("panel", style)
 
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left",   8)
-	margin.add_theme_constant_override("margin_right",  8)
-	margin.add_theme_constant_override("margin_top",    6)
-	margin.add_theme_constant_override("margin_bottom", 6)
+	margin.add_theme_constant_override("margin_left",   12)
+	margin.add_theme_constant_override("margin_right",  12)
+	margin.add_theme_constant_override("margin_top",    8)
+	margin.add_theme_constant_override("margin_bottom", 8)
 	_bubble.add_child(margin)
 
 	_bubble_label = Label.new()
 	_bubble_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_bubble_label.add_theme_color_override("font_color", Color.WHITE)
-	_bubble_label.add_theme_font_size_override("font_size", 15)
-	_bubble_label.custom_minimum_size = Vector2(150, 0)
+	_bubble_label.add_theme_font_size_override("font_size", 17)
+	_bubble_label.custom_minimum_size = Vector2(180, 0)
 	margin.add_child(_bubble_label)
 
 func _build_input() -> void:
 	_input_row = PanelContainer.new()
-	_input_row.position = Vector2(4, 166)
-	_input_row.size = Vector2(292, 30)
+	_input_row.size = Vector2(292, 44)
 	_input_row.hide()
 	add_child(_input_row)
 
