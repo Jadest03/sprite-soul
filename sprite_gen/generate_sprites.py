@@ -165,6 +165,20 @@ def split_frames(result, out_dir, frame_size=128, margin=8):
         raw_frames[name] = frame
         frame.save(os.path.join(out_dir, f"frame_{name}.png"))
 
+    # 3패스: 빈 프레임(불투명 픽셀 부족) → 같은 행의 첫 유효 프레임으로 대체
+    def _is_empty(frame: "Image.Image", min_opaque: int = 50) -> bool:
+        arr = np.array(frame)
+        return int((arr[:, :, 3] > 10).sum()) < min_opaque
+
+    for row_names in FRAME_NAMES:
+        fallback = next((raw_frames[n] for n in row_names if not _is_empty(raw_frames[n])), None)
+        if fallback is None:
+            continue
+        for name in row_names:
+            if _is_empty(raw_frames[name]):
+                raw_frames[name] = fallback.copy()
+                fallback.copy().save(os.path.join(out_dir, f"frame_{name}.png"))
+
     # Godot 애니메이션 파일 저장
     for anim_name, src in ANIM_MAP.items():
         raw_frames[src].copy().save(os.path.join(out_dir, f"{anim_name}.png"))
