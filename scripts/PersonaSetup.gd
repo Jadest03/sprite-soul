@@ -3,59 +3,152 @@ extends Node
 const PersonaGenerator = preload("res://scripts/PersonaGenerator.gd")
 const UserProfile = preload("res://scripts/UserProfile.gd")
 
-signal setup_completed(appearance: String, reference_image_path: String)
+signal setup_completed(gender: String, reference_image_path: String, appearance: String)
 
-const BG_COLOR     := Color(0.08, 0.08, 0.12)
-const TEXT_COLOR   := Color(0.92, 0.92, 0.95)
-const MUTED_COLOR  := Color(0.50, 0.50, 0.55)
-const ACCENT_COLOR := Color(0.85, 0.55, 0.20)
-const BTN_NORMAL   := Color(0.15, 0.15, 0.20)
-const BTN_SELECTED := Color(0.85, 0.55, 0.20)
+# 픽셀 RPG 팔레트
+const BG_COLOR      := Color(0.05, 0.05, 0.10)
+const PANEL_COLOR   := Color(0.08, 0.08, 0.16)
+const INPUT_COLOR   := Color(0.04, 0.04, 0.09)
+const BORDER_COLOR  := Color(0.90, 0.75, 0.25)   # 골드
+const BORDER_DIM    := Color(0.35, 0.28, 0.08)   # 어두운 골드
+const ACCENT_COLOR  := Color(0.90, 0.75, 0.25)
+const TEXT_COLOR    := Color(0.95, 0.90, 0.78)   # 따뜻한 흰색
+const MUTED_COLOR   := Color(0.50, 0.48, 0.40)
+const SELECT_COLOR  := Color(0.20, 0.50, 0.90)   # 파란 선택
 
-const FONT_TITLE   := 28
-const FONT_SUB     := 17
-const FONT_LABEL   := 19
-const FONT_INPUT   := 18
-const FONT_BTN     := 17
-const FONT_CONFIRM := 20
-const BTN_HEIGHT   := 42
-const CONFIRM_H    := 80
+const FONT_TITLE   := 36
+const FONT_LABEL   := 22
+const FONT_INPUT   := 20
+const FONT_SUB     := 16
+const FONT_BTN     := 20
+const FONT_CONFIRM := 24
+const BTN_HEIGHT   := 52
+const CONFIRM_H    := 86
+
+var _pixel_font: Font
 
 var _name_field: LineEdit
+var _appearance_field: LineEdit
 var _hf_token_field: LineEdit
 var _user_name_field: LineEdit
 var _confirm_btn: Button
 var _reference_image_path: String = ""
 var _ref_preview: TextureRect
-var _char_hints_field: LineEdit
-
-var _style_normal: StyleBoxFlat
-var _style_selected: StyleBoxFlat
+var _gender: String = "female"
+var _gender_btns: Dictionary = {}
 
 func _ready() -> void:
-	_init_styles()
+	_pixel_font = load("res://assets/fonts/PixelifySans-Regular.ttf")
 	_build_ui()
 
-func _init_styles() -> void:
-	_style_normal = _make_flat_style(BTN_NORMAL, 6)
-	_style_selected = _make_flat_style(BTN_SELECTED, 6)
+# ── 스타일 헬퍼 ──────────────────────────────────────────
 
-func _make_flat_style(bg: Color, radius: int) -> StyleBoxFlat:
+func _panel_style(bg: Color = PANEL_COLOR, border: Color = BORDER_COLOR, bw: int = 2) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.bg_color = bg
-	s.corner_radius_top_left     = radius
-	s.corner_radius_top_right    = radius
-	s.corner_radius_bottom_left  = radius
-	s.corner_radius_bottom_right = radius
+	s.border_color = border
+	s.border_width_left   = bw
+	s.border_width_right  = bw
+	s.border_width_top    = bw
+	s.border_width_bottom = bw
+	s.set_content_margin_all(0)
+	return s
+
+func _input_style(focused: bool = false) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = INPUT_COLOR
+	s.border_color = BORDER_COLOR if focused else BORDER_DIM
+	s.border_width_left   = 2
+	s.border_width_right  = 2
+	s.border_width_top    = 2
+	s.border_width_bottom = 2
+	s.set_content_margin_all(0)
+	return s
+
+func _btn_style(bg: Color, border: Color) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = bg
+	s.border_color = border
+	s.border_width_left   = 2
+	s.border_width_right  = 2
+	s.border_width_top    = 2
+	s.border_width_bottom = 2
 	s.set_content_margin_all(10)
 	return s
 
-func _build_ui() -> void:
-	var bg := ColorRect.new()
-	bg.color = BG_COLOR
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
+func _apply_font(ctrl: Control, size: int) -> void:
+	if _pixel_font:
+		ctrl.add_theme_font_override("font", _pixel_font)
+	ctrl.add_theme_font_size_override("font_size", size)
 
+func _make_label(text: String, size: int, color: Color, wrap: bool = false) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_color_override("font_color", color)
+	_apply_font(l, size)
+	if wrap:
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD
+	return l
+
+func _make_separator() -> HSeparator:
+	var sep := HSeparator.new()
+	var s := StyleBoxFlat.new()
+	s.bg_color = BORDER_DIM
+	sep.add_theme_stylebox_override("separator", s)
+	sep.add_theme_constant_override("separation", 2)
+	return sep
+
+func _make_input_field(placeholder: String, size: int, secret: bool = false) -> LineEdit:
+	var f := LineEdit.new()
+	f.placeholder_text = placeholder
+	f.secret = secret
+	f.add_theme_color_override("font_color", TEXT_COLOR)
+	f.add_theme_color_override("font_placeholder_color", MUTED_COLOR)
+	f.add_theme_color_override("caret_color", BORDER_COLOR)
+	f.add_theme_color_override("selection_color", SELECT_COLOR)
+	f.add_theme_stylebox_override("normal",    _input_style(false))
+	f.add_theme_stylebox_override("focus",     _input_style(true))
+	f.add_theme_stylebox_override("read_only", _input_style(false))
+	_apply_font(f, size)
+	return f
+
+func _apply_pixel_btn(btn: Button, bg: Color, border: Color, fg: Color) -> void:
+	btn.add_theme_stylebox_override("normal",   _btn_style(bg, border))
+	btn.add_theme_stylebox_override("pressed",  _btn_style(bg.darkened(0.2), border))
+	btn.add_theme_stylebox_override("hover",    _btn_style(bg.lightened(0.08), border))
+	btn.add_theme_stylebox_override("focus",    _btn_style(bg, border))
+	btn.add_theme_stylebox_override("disabled", _btn_style(bg.darkened(0.3), BORDER_DIM))
+	btn.add_theme_color_override("font_color",         fg)
+	btn.add_theme_color_override("font_hover_color",   fg)
+	btn.add_theme_color_override("font_pressed_color", fg)
+	btn.add_theme_color_override("font_focus_color",   fg)
+	_apply_font(btn, FONT_BTN)
+
+# ── UI 빌드 ──────────────────────────────────────────────
+
+func _make_grid_bg() -> Control:
+	var tile_size := 12
+	var tile_img := Image.create(tile_size, tile_size, false, Image.FORMAT_RGBA8)
+	var line_c := Color(0.11, 0.11, 0.22, 1.0)
+	for x in tile_size:
+		for y in tile_size:
+			tile_img.set_pixel(x, y, BG_COLOR)
+	for i in tile_size:
+		tile_img.set_pixel(0, i, line_c)
+		tile_img.set_pixel(i, 0, line_c)
+	var tile_tex := ImageTexture.create_from_image(tile_img)
+	var bg := TextureRect.new()
+	bg.texture = tile_tex
+	bg.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	bg.stretch_mode = TextureRect.STRETCH_TILE
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	return bg
+
+func _build_ui() -> void:
+	# 픽셀 그리드 배경
+	add_child(_make_grid_bg())
+
+	# 스크롤
 	var scroll := ScrollContainer.new()
 	scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	scroll.offset_bottom = -CONFIRM_H
@@ -63,87 +156,98 @@ func _build_ui() -> void:
 
 	var vbox := VBoxContainer.new()
 	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_theme_constant_override("separation", 22)
+	vbox.add_theme_constant_override("separation", 18)
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left",   28)
-	margin.add_theme_constant_override("margin_right",  28)
-	margin.add_theme_constant_override("margin_top",    28)
-	margin.add_theme_constant_override("margin_bottom", 20)
+	margin.add_theme_constant_override("margin_left",   24)
+	margin.add_theme_constant_override("margin_right",  24)
+	margin.add_theme_constant_override("margin_top",    24)
+	margin.add_theme_constant_override("margin_bottom", 16)
 	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.add_child(vbox)
 	scroll.add_child(margin)
 
 	_add_title(vbox)
-	_add_name_section(vbox)
-	_add_reference_image_section(vbox)
-	_add_hf_token_section(vbox)
-	_add_user_name_section(vbox)
+	_add_section(vbox, "▶ 이름", _build_name_content())
+	_add_section(vbox, "▶ 캐릭터 이미지", _build_image_content())
+	_add_section(vbox, "▶ 성별", _build_gender_content())
+	_add_section(vbox, "▶ 외형 설명  (선택)", _build_appearance_content())
+	_add_section(vbox, "▶ HuggingFace 토큰", _build_token_content())
+	_add_section(vbox, "▶ 내 이름  (선택)", _build_username_content())
 
-	# 하단 고정 완성 버튼
-	var btn_container := PanelContainer.new()
-	btn_container.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	btn_container.offset_top = -CONFIRM_H
-	btn_container.offset_bottom = 0
-	var btn_style := StyleBoxFlat.new()
-	btn_style.bg_color = BG_COLOR
-	btn_style.border_color = Color(0.2, 0.2, 0.25)
-	btn_style.border_width_top = 1
-	btn_style.set_content_margin_all(0)
-	btn_container.add_theme_stylebox_override("panel", btn_style)
-	add_child(btn_container)
+	# 하단 확정 버튼
+	var footer := PanelContainer.new()
+	footer.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	footer.offset_top = -CONFIRM_H
+	footer.offset_bottom = 0
+	var footer_style := _panel_style(BG_COLOR, BORDER_DIM, 0)
+	footer_style.border_width_top = 2
+	footer.add_theme_stylebox_override("panel", footer_style)
+	add_child(footer)
 
-	var btn_margin := MarginContainer.new()
-	btn_margin.add_theme_constant_override("margin_left",   28)
-	btn_margin.add_theme_constant_override("margin_right",  28)
-	btn_margin.add_theme_constant_override("margin_top",    14)
-	btn_margin.add_theme_constant_override("margin_bottom", 14)
-	btn_container.add_child(btn_margin)
+	var fm := MarginContainer.new()
+	fm.add_theme_constant_override("margin_left",   24)
+	fm.add_theme_constant_override("margin_right",  24)
+	fm.add_theme_constant_override("margin_top",    12)
+	fm.add_theme_constant_override("margin_bottom", 12)
+	footer.add_child(fm)
 
 	_confirm_btn = Button.new()
-	_confirm_btn.text = "완성"
+	_confirm_btn.text = "▶  완성"
 	_confirm_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_confirm_btn.add_theme_font_size_override("font_size", FONT_CONFIRM)
-	_apply_btn_style(_confirm_btn, ACCENT_COLOR, Color(1, 1, 1))
+	_apply_pixel_btn(_confirm_btn, ACCENT_COLOR.darkened(0.3), ACCENT_COLOR, TEXT_COLOR)
+	_apply_font(_confirm_btn, FONT_CONFIRM)
 	_confirm_btn.pressed.connect(_on_confirm_pressed)
-	btn_margin.add_child(_confirm_btn)
+	fm.add_child(_confirm_btn)
 
-func _add_reference_image_section(parent: VBoxContainer) -> void:
-	var sep := HSeparator.new()
-	sep.add_theme_color_override("color", Color(0.2, 0.2, 0.25))
-	parent.add_child(sep)
+func _add_title(parent: VBoxContainer) -> void:
+	var title := _make_label("SPRITE  SOUL", FONT_TITLE, BORDER_COLOR)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	parent.add_child(title)
+	var sub := _make_label("이름 · 이미지 · 성별만 있으면 돼", FONT_SUB, MUTED_COLOR)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	parent.add_child(sub)
 
-	var label := Label.new()
-	label.text = "캐릭터 참고 이미지 (선택)"
-	label.add_theme_font_size_override("font_size", FONT_LABEL)
-	label.add_theme_color_override("font_color", TEXT_COLOR)
-	parent.add_child(label)
+func _add_section(parent: VBoxContainer, title: String, content: Control) -> void:
+	parent.add_child(_make_separator())
+	parent.add_child(_make_label(title, FONT_LABEL, BORDER_COLOR))
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", _panel_style())
+	var inner := MarginContainer.new()
+	inner.add_theme_constant_override("margin_left",   12)
+	inner.add_theme_constant_override("margin_right",  12)
+	inner.add_theme_constant_override("margin_top",    10)
+	inner.add_theme_constant_override("margin_bottom", 10)
+	inner.add_child(content)
+	panel.add_child(inner)
+	parent.add_child(panel)
 
-	var hint := Label.new()
-	hint.text = "이미지를 넣으면 해당 캐릭터를 픽셀아트로 변환해요. 없으면 텍스트 설명으로 생성."
-	hint.add_theme_font_size_override("font_size", FONT_SUB)
-	hint.add_theme_color_override("font_color", MUTED_COLOR)
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD
-	parent.add_child(hint)
+# ── 섹션별 컨텐츠 빌드 ───────────────────────────────────
+
+func _build_name_content() -> Control:
+	_name_field = _make_input_field("companion의 이름을 입력해줘", FONT_INPUT)
+	return _name_field
+
+func _build_image_content() -> Control:
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
 
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	parent.add_child(row)
+	row.add_theme_constant_override("separation", 10)
 
 	var pick_btn := Button.new()
-	pick_btn.text = "이미지 선택"
-	pick_btn.add_theme_font_size_override("font_size", FONT_BTN)
-	pick_btn.custom_minimum_size = Vector2(120, BTN_HEIGHT)
-	_apply_btn_style(pick_btn, BTN_NORMAL, MUTED_COLOR)
+	pick_btn.text = "파일 선택"
+	pick_btn.custom_minimum_size = Vector2(100, BTN_HEIGHT)
+	_apply_pixel_btn(pick_btn, PANEL_COLOR, BORDER_DIM, MUTED_COLOR)
 
-	var path_label := Label.new()
-	path_label.text = "선택된 파일 없음"
-	path_label.add_theme_font_size_override("font_size", FONT_BTN)
-	path_label.add_theme_color_override("font_color", MUTED_COLOR)
+	var path_label := _make_label("선택된 파일 없음", FONT_SUB, MUTED_COLOR)
 	path_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	path_label.clip_text = true
+	path_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 
 	_ref_preview = TextureRect.new()
-	_ref_preview.custom_minimum_size = Vector2(64, 64)
+	_ref_preview.custom_minimum_size = Vector2(56, 56)
 	_ref_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_ref_preview.hide()
 
@@ -153,14 +257,12 @@ func _add_reference_image_section(parent: VBoxContainer) -> void:
 	dialog.filters = ["*.png,*.jpg,*.jpeg,*.webp ; 이미지 파일"]
 	add_child(dialog)
 
-	pick_btn.pressed.connect(func():
-		dialog.popup_centered(Vector2(700, 500))
-	)
+	pick_btn.pressed.connect(func(): dialog.popup_centered(Vector2(700, 500)))
 	dialog.file_selected.connect(func(path: String):
 		_reference_image_path = path
 		path_label.text = path.get_file()
 		path_label.add_theme_color_override("font_color", TEXT_COLOR)
-		_apply_btn_style(pick_btn, BTN_SELECTED, Color(1, 1, 1))
+		_apply_pixel_btn(pick_btn, PANEL_COLOR, BORDER_COLOR, BORDER_COLOR)
 		var img := Image.load_from_file(path)
 		if img:
 			_ref_preview.texture = ImageTexture.create_from_image(img)
@@ -170,105 +272,67 @@ func _add_reference_image_section(parent: VBoxContainer) -> void:
 	row.add_child(pick_btn)
 	row.add_child(path_label)
 	row.add_child(_ref_preview)
+	vbox.add_child(row)
 
-	# 선택적 특징 힌트 필드
-	var hints_label := Label.new()
-	hints_label.text = "특징 힌트 (선택) — 이미지로 잡기 어려운 디테일을 영어로 적어주세요"
-	hints_label.add_theme_font_size_override("font_size", FONT_SUB)
-	hints_label.add_theme_color_override("font_color", MUTED_COLOR)
-	parent.add_child(hints_label)
+	return vbox
 
-	var hints_panel := PanelContainer.new()
-	var hints_style := StyleBoxFlat.new()
-	hints_style.bg_color = BTN_NORMAL
-	hints_style.corner_radius_top_left     = 8
-	hints_style.corner_radius_top_right    = 8
-	hints_style.corner_radius_bottom_left  = 8
-	hints_style.corner_radius_bottom_right = 8
-	hints_panel.add_theme_stylebox_override("panel", hints_style)
-	parent.add_child(hints_panel)
+func _build_gender_content() -> Control:
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 12)
+	for entry in [["여자", "female"], ["남자", "male"]]:
+		var label: String = entry[0]
+		var val: String   = entry[1]
+		var btn := Button.new()
+		btn.text = label
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.custom_minimum_size = Vector2(0, BTN_HEIGHT)
+		_apply_font(btn, FONT_BTN)
+		_gender_btns[val] = btn
+		btn.pressed.connect(func(): _select_gender(val))
+		hbox.add_child(btn)
+	_select_gender("female")
+	return hbox
 
-	var hints_margin := MarginContainer.new()
-	hints_margin.add_theme_constant_override("margin_left",  10)
-	hints_margin.add_theme_constant_override("margin_right", 10)
-	hints_margin.add_theme_constant_override("margin_top",    6)
-	hints_margin.add_theme_constant_override("margin_bottom", 6)
-	hints_panel.add_child(hints_margin)
+func _select_gender(val: String) -> void:
+	_gender = val
+	for v in _gender_btns:
+		var btn: Button = _gender_btns[v]
+		if v == val:
+			_apply_pixel_btn(btn, ACCENT_COLOR.darkened(0.2), ACCENT_COLOR, TEXT_COLOR)
+		else:
+			_apply_pixel_btn(btn, PANEL_COLOR, BORDER_DIM, MUTED_COLOR)
 
-	_char_hints_field = LineEdit.new()
-	_char_hints_field.placeholder_text = "예: white spiky hair, black blindfold, dark suit"
-	_char_hints_field.add_theme_font_size_override("font_size", FONT_BTN)
-	_char_hints_field.add_theme_color_override("font_color", TEXT_COLOR)
-	_char_hints_field.add_theme_color_override("font_placeholder_color", MUTED_COLOR)
-	var empty := StyleBoxEmpty.new()
-	_char_hints_field.add_theme_stylebox_override("normal", empty)
-	_char_hints_field.add_theme_stylebox_override("focus",  empty)
-	hints_margin.add_child(_char_hints_field)
+func _build_appearance_content() -> Control:
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+	vbox.add_child(_make_label("핵심 특징 3~5개  —  머리색, 눈색, 옷 위주로 영어 태그로", FONT_SUB, MUTED_COLOR, true))
+	_appearance_field = _make_input_field("예: red hair, red eyes, white shirt, black tie", FONT_INPUT)
+	vbox.add_child(_appearance_field)
+	return vbox
 
-func _add_title(parent: VBoxContainer) -> void:
-	var title := Label.new()
-	title.text = "새로운 companion 만들기"
-	title.add_theme_font_size_override("font_size", FONT_TITLE)
-	title.add_theme_color_override("font_color", TEXT_COLOR)
-	parent.add_child(title)
+func _build_token_content() -> Control:
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+	vbox.add_child(_make_label("huggingface.co/settings/tokens 에서 발급 (최초 1회)", FONT_SUB, MUTED_COLOR, true))
+	_hf_token_field = _make_input_field("hf_...", FONT_INPUT, true)
+	var saved := _load_saved_token()
+	if not saved.is_empty():
+		_hf_token_field.text = saved
+	vbox.add_child(_hf_token_field)
+	return vbox
 
-	var sub := Label.new()
-	sub.text = "이미지와 이름만 있으면 돼"
-	sub.add_theme_font_size_override("font_size", FONT_SUB)
-	sub.add_theme_color_override("font_color", MUTED_COLOR)
-	parent.add_child(sub)
+func _build_username_content() -> Control:
+	_user_name_field = _make_input_field("캐릭터가 나를 부를 이름", FONT_INPUT)
+	return _user_name_field
 
-func _add_name_section(parent: VBoxContainer) -> void:
-	var sep := HSeparator.new()
-	sep.add_theme_color_override("color", Color(0.2, 0.2, 0.25))
-	parent.add_child(sep)
+func _load_saved_token() -> String:
+	const TOKEN_PATH = "user://hf_token.txt"
+	if not FileAccess.file_exists(TOKEN_PATH):
+		return OS.get_environment("HF_TOKEN")
+	var f := FileAccess.open(TOKEN_PATH, FileAccess.READ)
+	return f.get_as_text().strip_edges() if f else ""
 
-	var label := Label.new()
-	label.text = "이름"
-	label.add_theme_font_size_override("font_size", FONT_LABEL)
-	label.add_theme_color_override("font_color", TEXT_COLOR)
-	parent.add_child(label)
-
-	var panel := PanelContainer.new()
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = BTN_NORMAL
-	ps.corner_radius_top_left     = 8
-	ps.corner_radius_top_right    = 8
-	ps.corner_radius_bottom_left  = 8
-	ps.corner_radius_bottom_right = 8
-	ps.set_content_margin_all(0)
-	panel.add_theme_stylebox_override("panel", ps)
-	parent.add_child(panel)
-
-	var pm := MarginContainer.new()
-	pm.add_theme_constant_override("margin_left",   12)
-	pm.add_theme_constant_override("margin_right",  12)
-	pm.add_theme_constant_override("margin_top",     8)
-	pm.add_theme_constant_override("margin_bottom",  8)
-	panel.add_child(pm)
-
-	_name_field = LineEdit.new()
-	_name_field.placeholder_text = "companion의 이름을 입력해줘"
-	_name_field.add_theme_font_size_override("font_size", FONT_INPUT)
-	_name_field.add_theme_color_override("font_color", TEXT_COLOR)
-	_name_field.add_theme_color_override("font_placeholder_color", MUTED_COLOR)
-	var empty := StyleBoxEmpty.new()
-	_name_field.add_theme_stylebox_override("normal",    empty)
-	_name_field.add_theme_stylebox_override("focus",     empty)
-	_name_field.add_theme_stylebox_override("read_only", empty)
-	pm.add_child(_name_field)
-
-func _apply_btn_style(btn: Button, bg: Color, fg: Color) -> void:
-	var is_selected := bg == BTN_SELECTED
-	var base := _style_selected if is_selected else _style_normal
-	for state in ["normal", "pressed", "focus", "disabled"]:
-		btn.add_theme_stylebox_override(state, base)
-	var hover := _make_flat_style(bg.lightened(0.05), 6)
-	btn.add_theme_stylebox_override("hover", hover)
-	btn.add_theme_color_override("font_color",         fg)
-	btn.add_theme_color_override("font_hover_color",   fg)
-	btn.add_theme_color_override("font_pressed_color", fg)
-	btn.add_theme_color_override("font_focus_color",   fg)
+# ── 이벤트 ───────────────────────────────────────────────
 
 func _on_confirm_pressed() -> void:
 	var name := _name_field.text.strip_edges()
@@ -285,18 +349,18 @@ func _on_confirm_pressed() -> void:
 	var tf := FileAccess.open("user://hf_token.txt", FileAccess.WRITE)
 	if tf:
 		tf.store_string(hf_token)
-	var appearance := _char_hints_field.text.strip_edges() if _char_hints_field else ""
-	PersonaGenerator.save_persona(name, {}, appearance)
+	PersonaGenerator.save_persona(name, {}, _gender)
 	var user_name := _user_name_field.text.strip_edges()
 	if not user_name.is_empty():
 		var profile := UserProfile.new()
 		profile.set_name(user_name)
-	setup_completed.emit(appearance, _reference_image_path)
+	var appearance := _appearance_field.text.strip_edges()
+	setup_completed.emit(_gender, _reference_image_path, appearance)
 
 func _shake(target: Control) -> void:
 	var original_x := target.position.x
 	var tween := create_tween()
 	for i in 3:
-		tween.tween_property(target, "position:x", original_x + 8, 0.05)
-		tween.tween_property(target, "position:x", original_x - 8, 0.05)
-	tween.tween_property(target, "position:x", original_x, 0.05)
+		tween.tween_property(target, "position:x", original_x + 6, 0.04)
+		tween.tween_property(target, "position:x", original_x - 6, 0.04)
+	tween.tween_property(target, "position:x", original_x, 0.04)

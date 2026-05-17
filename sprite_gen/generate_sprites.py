@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
 SpriteSoul - Local Sprite Generator
-Usage: python generate_sprites.py --character "girl with black hair" --output ./sprites
+Usage: python generate_sprites.py --gender female --output ./sprites
 """
 
 import argparse
 import os
-import sys
 import threading
 import time
 from collections import deque
 import numpy as np
 from PIL import Image
+from scipy import ndimage as ndi
 
 try:
     NEAREST = Image.Resampling.NEAREST
@@ -42,22 +42,16 @@ def detect_device():
         return "cpu", torch.float32
 
 
-def build_prompt(character: str, use_image_ref: bool = False) -> str:
-    if use_image_ref:
-        if character:
-            base = f"Create a pixel art spritesheet of the character in the image, with {character}."
-        else:
-            base = "Create a pixel art spritesheet of the character in the image."
-    else:
-        base = f"pixel art spritesheet of {character}."
+def build_prompt(gender: str = "female", appearance: str = "") -> str:
+    g = "female" if gender.strip().lower() in ("female", "girl", "woman", "f", "여자") else "male"
+    app = f"{appearance.strip()}, " if appearance.strip() else ""
     return (
-        base + " "
+        f"{app}Create a pixel art spritesheet of the {g} character in the image. "
         "The spritesheet is a 4 by 4 grid of four rows of frames - "
         "first row is 3 walking frames facing down and 1 frame both arms raised, "
         "second row is 3 walking frames facing left and 1 frame jumping left, "
         "third row is 3 walking frames facing right and 1 frame jumping right, "
-        "fourth row is 3 upright walking frames showing the character from behind (back view, walking away) and 1 frame of the character lying flat on the floor. "
-        "full body visible including feet, white background between frames, chibi style, retro RPG game sprite."
+        "fourth row is 3 walking frames back view facing up and 1 frame lying on floor."
     )
 
 
@@ -149,35 +143,58 @@ def split_frames(result, out_dir, frame_size=128, margin=8):
         bounds.append(min(result.width, end + pad))
         return bounds
 
-    # walk_left 행은 4프레임이 고르게 분포 → 해당 행만의 밀도로 컬럼 경계 독립 검출
+    # walk_left/walk_down 행은 각 행의 밀도로 컬럼 경계 독립 검출
+    walk_down_col_bounds = _row_col_bounds(row_bounds[0], row_bounds[1])
     walk_left_col_bounds = _row_col_bounds(row_bounds[1], row_bounds[2])
 
     def _smart_crop(img, density_threshold=0.04):
-        """컬럼/행 density 기반으로 아티팩트를 제외하고 주요 캐릭터 영역만 크롭."""
+        """가로는 density 필터(아티팩트 제거), 세로는 tight 기준(발끝 보존)."""
         arr = np.array(img.convert("RGB"))
         content = ~((arr[:, :, 0] > 230) & (arr[:, :, 1] > 230) & (arr[:, :, 2] > 230))
         col_den = content.sum(axis=0) / max(content.shape[0], 1)
-        row_den = content.sum(axis=1) / max(content.shape[1], 1)
         col_mask = col_den > density_threshold
-        row_mask = row_den > density_threshold
-        if not col_mask.any() or not row_mask.any():
+        row_any = content.any(axis=1)
+        if not col_mask.any() or not row_any.any():
             return tight_crop(img)
         x0, x1 = int(np.where(col_mask)[0][0]), int(np.where(col_mask)[0][-1])
-        y0, y1 = int(np.where(row_mask)[0][0]), int(np.where(row_mask)[0][-1])
+        y0, y1 = int(np.where(row_any)[0][0]), int(np.where(row_any)[0][-1])
         return img.crop((x0, y0, x1 + 1, y1 + 1))
 
-    # 1패스: 스마트 크롭 (density 기반으로 고립된 아티팩트 제외)
-    # walk_left 행(row 1)은 독립 컬럼 경계 사용
-    ROW_COL_BOUNDS = {1: walk_left_col_bounds}
+    def _filter_largest_component(rgba_img):
+        """rembg alpha 기반으로 가장 큰 연결 컴포넌트만 남기고 아티팩트 제거."""
+        arr = np.array(rgba_img)
+        alpha = arr[:, :, 3] > 10
+        if not alpha.any():
+            return rgba_img
+        labeled, n = ndi.label(alpha)
+        if n <= 1:
+            return rgba_img
+        sizes = ndi.sum(alpha, labeled, range(1, n + 1))
+        main_label = int(np.argmax(sizes)) + 1
+        mask = labeled == main_label
+        result = arr.copy()
+        result[~mask, 3] = 0
+        return Image.fromarray(result, "RGBA")
+
+    # 1패스: 모든 행 독립 컬럼 경계 + connected component 아티팩트 제거
+    walk_right_col_bounds = _row_col_bounds(row_bounds[2], row_bounds[3])
+    walk_back_col_bounds  = _row_col_bounds(row_bounds[3], result.height)
+    ROW_COL_BOUNDS = {
+        0: walk_down_col_bounds,
+        1: walk_left_col_bounds,
+        2: walk_right_col_bounds,
+        3: walk_back_col_bounds,
+    }
     tight_frames = {}
     for row_idx, row_names in enumerate(FRAME_NAMES):
-        cb = ROW_COL_BOUNDS.get(row_idx, col_bounds)
+        cb = ROW_COL_BOUNDS[row_idx]
         for col_idx, name in enumerate(row_names):
             x1 = cb[col_idx]
             y1 = row_bounds[row_idx]
             x2 = result.width  if col_idx == 3 else cb[col_idx + 1]
             y2 = result.height if row_idx == 3 else row_bounds[row_idx + 1]
-            tight_frames[name] = _smart_crop(result.crop((x1, y1, x2, y2)))
+            cell = result.crop((x1, y1, x2, y2))
+            tight_frames[name] = _smart_crop(cell)
 
     # 1.5패스: 스케일링 전 원본 기준으로 유효성 계산
     # tight_crop은 RGB라 RGBA 변환 시 alpha=255 → remove_white_bg로 실제 불투명 픽셀 계산
@@ -198,7 +215,7 @@ def split_frames(result, out_dir, frame_size=128, margin=8):
 
     raw_frames = {}
     for name, tc in tight_frames.items():
-        tc_rgba = remove_white_bg(tc)
+        tc_rgba = _filter_largest_component(remove_white_bg(tc))
         w, h = tc_rgba.size
 
         if name not in LYING_FRAMES and h > 10:
@@ -238,21 +255,23 @@ def split_frames(result, out_dir, frame_size=128, margin=8):
     else:
         walk_2_src, walk_3_src = "jump_left", "walk_left_1"
 
+    def _pixel_count(name: str) -> int:
+        arr = np.array(raw_frames[name])
+        return int((arr[:, :, 3] > 10).sum())
+
+    idle_src = max(["walk_down_1", "walk_down_2", "walk_down_3"], key=_pixel_count)
+
     ANIM_MAP = {
-        "idle_1":  "walk_down_1",
-        "idle_2":  "arms_raised",
+        "idle_1":  idle_src,
         "walk_1":  "walk_left_1",
         "walk_2":  walk_2_src,
         "walk_3":  walk_3_src,
         "sleep_1": "lying_down",
-        "sleep_2": "walk_back_1",
         "react_1": "arms_raised",
-        "react_2": "walk_down_1",
+        "react_2": idle_src,
     }
 
-    # Godot 애니메이션 파일 저장
     # walk 프레임은 walk_left 기반이라 오른쪽을 향하도록 미러링
-    # (Godot에서 flip_h로 방향 전환 시 left=flip, right=no-flip이 맞아야 함)
     WALK_ANIM = {"walk_1", "walk_2", "walk_3"}
     for anim_name, src in ANIM_MAP.items():
         frame = raw_frames[src].copy()
@@ -352,7 +371,7 @@ def generate(args):
         t.join(timeout=1)
     log("모델 로드 완료")
 
-    prompt = build_prompt(args.character, use_image_ref)
+    prompt = build_prompt(args.gender, args.appearance)
     generator = torch.Generator(device).manual_seed(args.seed)
 
     def on_step_end(pipe, step, timestep, callback_kwargs):
@@ -369,7 +388,7 @@ def generate(args):
         prompt=prompt,
         image=ref_img,
         num_inference_steps=steps,
-        guidance_scale=0.5,
+        guidance_scale=3.5,
         height=512,
         width=512,
         generator=generator,
@@ -393,7 +412,8 @@ def generate(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SpriteSoul Sprite Generator")
-    parser.add_argument("--character", required=True, help="캐릭터 설명 (영문)")
+    parser.add_argument("--gender",     default="female", help="캐릭터 성별 (female/male)")
+    parser.add_argument("--appearance", default="",       help="외형 설명 (예: red hair, blue eyes)")
     parser.add_argument("--output",    default="./sprites", help="출력 디렉토리")
     parser.add_argument("--seed",      type=int, default=42)
     parser.add_argument("--steps",     type=int, default=None, help="추론 스텝 (기본: GPU=64, CPU=20)")

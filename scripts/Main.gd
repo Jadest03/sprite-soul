@@ -7,7 +7,7 @@ const PersonaGenerator  = preload("res://scripts/PersonaGenerator.gd")
 const SpriteGenerator   = preload("res://scripts/SpriteGenerator.gd")
 
 const COMPANION_AREA := Vector2i(300, 330)
-const SETUP_AREA     := Vector2i(520, 860)
+const SETUP_AREA     := Vector2i(820, 1100)
 
 var _generator: Node
 var _loading_label: Label
@@ -31,19 +31,19 @@ func _setup_setup_window() -> void:
 	DisplayServer.window_set_position(pos)
 	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, false)
 	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_TRANSPARENT, false)
-	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_ALWAYS_ON_TOP, true)
+	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_ALWAYS_ON_TOP, false)
 
 func _launch_setup() -> void:
 	var setup := PersonaSetupScene.instantiate()
 	add_child(setup)
 	setup.setup_completed.connect(_on_setup_completed)
 
-func _on_setup_completed(appearance: String, reference_image_path: String) -> void:
+func _on_setup_completed(gender: String, reference_image_path: String, appearance: String) -> void:
 	for child in get_children():
 		child.queue_free()
 	await get_tree().process_frame
 	_show_loading_ui()
-	_start_sprite_generation(appearance, reference_image_path)
+	_start_sprite_generation(gender, reference_image_path, appearance)
 
 # --- Sprite generation ---
 
@@ -91,13 +91,13 @@ func _show_loading_ui() -> void:
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(hint)
 
-func _start_sprite_generation(appearance: String, reference_image_path: String = "") -> void:
+func _start_sprite_generation(gender: String, reference_image_path: String = "", appearance: String = "") -> void:
 	_generator = SpriteGenerator.new()
 	add_child(_generator)
 	_generator.progress_updated.connect(_on_gen_progress)
 	_generator.generation_completed.connect(_on_gen_completed)
 	_generator.generation_failed.connect(_on_gen_failed)
-	_generator.generate(appearance, reference_image_path)
+	_generator.generate(gender, reference_image_path, appearance)
 
 func _on_gen_progress(message: String) -> void:
 	if message.begins_with("STEP:"):

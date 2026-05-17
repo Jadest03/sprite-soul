@@ -8,3 +8,4 @@ sentencepiece
 Pillow>=10.0.0
 huggingface_hub
 numpy
+scipy
