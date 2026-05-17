@@ -21,7 +21,6 @@ var _generator: Node
 var _loading_label: Label
 var _progress_bar: ProgressBar
 
-# 생성 파라미터 (재생성 시 재사용)
 var _gen_reference_image_path: String = ""
 
 # 프리뷰
@@ -123,7 +122,7 @@ func _start_sprite_generation() -> void:
 	_generator.progress_updated.connect(_on_gen_progress)
 	_generator.generation_completed.connect(_on_gen_completed)
 	_generator.generation_failed.connect(_on_gen_failed)
-	_generator.generate(_gen_reference_image_path, randi())
+	_generator.generate(_gen_reference_image_path, 42)
 
 func _on_gen_progress(message: String) -> void:
 	if message.begins_with("STEP:"):
@@ -255,21 +254,7 @@ func _show_preview() -> void:
 	sep.add_theme_constant_override("separation", 2)
 	vbox.add_child(sep)
 
-	# 재생성 / 이대로 시작 버튼
-	var action_row := HBoxContainer.new()
-	action_row.add_theme_constant_override("separation", 16)
-	vbox.add_child(action_row)
-
-	var regen_btn := Button.new()
-	regen_btn.text = "↺  재생성"
-	regen_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	regen_btn.custom_minimum_size = Vector2(0, 72)
-	if _pixel_font: regen_btn.add_theme_font_override("font", _pixel_font)
-	regen_btn.add_theme_font_size_override("font_size", 22)
-	_apply_btn(regen_btn, PANEL_COLOR, BORDER_DIM, MUTED_COLOR)
-	regen_btn.pressed.connect(_on_regenerate)
-	action_row.add_child(regen_btn)
-
+	# 이대로 시작 버튼
 	var confirm_btn := Button.new()
 	confirm_btn.text = "▶  이대로 시작"
 	confirm_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -278,7 +263,7 @@ func _show_preview() -> void:
 	confirm_btn.add_theme_font_size_override("font_size", 22)
 	_apply_btn(confirm_btn, ACCENT_COLOR.darkened(0.3), ACCENT_COLOR, TEXT_COLOR)
 	confirm_btn.pressed.connect(_on_preview_confirmed)
-	action_row.add_child(confirm_btn)
+	vbox.add_child(confirm_btn)
 
 	# 애니메이션 타이머
 	_preview_timer = Timer.new()
@@ -314,16 +299,6 @@ func _on_preview_tick() -> void:
 	_preview_frame = (_preview_frame + 1) % frames.size()
 	if frames[_preview_frame]:
 		_preview_rect.texture = frames[_preview_frame]
-
-func _on_regenerate() -> void:
-	if _preview_timer and is_instance_valid(_preview_timer):
-		_preview_timer.stop()
-	_delete_sprites_dir()
-	for child in get_children():
-		child.queue_free()
-	await get_tree().process_frame
-	_show_loading_ui()
-	_start_sprite_generation()
 
 func _on_preview_confirmed() -> void:
 	if _preview_timer and is_instance_valid(_preview_timer):

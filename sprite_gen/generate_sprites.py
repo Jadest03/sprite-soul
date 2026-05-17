@@ -112,15 +112,116 @@ def remove_white_bg(img):
             if 0 <= ny < h and 0 <= nx < w and not visited[ny, nx] and bg[ny, nx]:
                 queue.append((ny, nx))
     arr[visited, 3] = 0
-    # BFS 경계 인접 반투명 픽셀(edge fringe) 추가 제거
-    fringe = np.zeros((h, w), dtype=bool)
-    for dy, dx in ((-1,0),(1,0),(0,-1),(0,1)):
-        shifted = np.roll(visited, (dy, dx), axis=(0, 1))
-        fringe |= shifted
-    fringe &= ~visited
-    near_white = (arr[:, :, 0] > 200) & (arr[:, :, 1] > 200) & (arr[:, :, 2] > 200)
-    arr[fringe & near_white, 3] = 0
     return Image.fromarray(arr)
+
+
+def _detect_col_count(img):
+    """가로 밀도 클러스터로 2열 vs 4열 판별."""
+    arr = np.array(img.convert("RGB"))
+    content = ~((arr[:, :, 0] > 230) & (arr[:, :, 1] > 230) & (arr[:, :, 2] > 230))
+    col_den = content.sum(axis=0).astype(float)
+    kernel = 8
+    smoothed = np.convolve(col_den, np.ones(kernel) / kernel, mode="same")
+    if smoothed.max() == 0:
+        return 4
+    threshold = smoothed.max() * 0.08
+    in_cluster = smoothed[0] > threshold
+    clusters = 1 if in_cluster else 0
+    for v in smoothed[1:]:
+        if v > threshold and not in_cluster:
+            clusters += 1
+            in_cluster = True
+        elif v <= threshold:
+            in_cluster = False
+    return 2 if clusters <= 2 else 4
+
+
+def _split_frames_4x2(result, out_dir, frame_size, margin, row_bounds):
+    """4×2 layout: 4행 × 2열 = 8프레임."""
+    FRAME_NAMES_4x2 = [
+        ["walk_down_1", "arms_raised"],
+        ["walk_left_1", "jump_left"],
+        ["walk_right_1", "jump_right"],
+        ["walk_back_1", "lying_down"],
+    ]
+
+    def _row_col_bounds_2(row_y1, row_y2, pad=5):
+        strip = result.crop((0, row_y1, result.width, row_y2))
+        arr2 = np.array(strip.convert("RGB"))
+        den = (~((arr2[:, :, 0] > 230) & (arr2[:, :, 1] > 230) & (arr2[:, :, 2] > 230))).sum(axis=0).astype(float)
+        nz = np.where(den > 2)[0]
+        if len(nz) == 0:
+            mid = result.width // 2
+            return [0, mid, result.width]
+        start, end = int(nz[0]), int(nz[-1])
+        qr = (end - start) // 4
+        c = (start + end) // 2
+        lo, hi = max(start, c - qr), min(end, c + qr)
+        valley = lo + int(np.argmin(den[lo:hi]))
+        return [max(0, start - pad), valley, min(result.width, end + pad)]
+
+    def _process(crop_img, is_lying=False):
+        arr2 = np.array(crop_img.convert("RGB"))
+        cont = ~((arr2[:, :, 0] > 230) & (arr2[:, :, 1] > 230) & (arr2[:, :, 2] > 230))
+        row_a, col_a = np.any(cont, axis=1), np.any(cont, axis=0)
+        if not row_a.any():
+            return Image.new("RGBA", (frame_size, frame_size), (0, 0, 0, 0))
+        ry0, ry1 = int(np.where(row_a)[0][0]), int(np.where(row_a)[0][-1])
+        cx0, cx1 = int(np.where(col_a)[0][0]), int(np.where(col_a)[0][-1])
+        tc = crop_img.crop((cx0, ry0, cx1 + 1, ry1 + 1))
+        rgba = remove_white_bg(tc)
+        alpha = np.array(rgba)[:, :, 3] > 10
+        labeled, n = ndi.label(alpha)
+        if n > 1:
+            sizes = ndi.sum(alpha, labeled, range(1, n + 1))
+            main = int(np.argmax(sizes)) + 1
+            arr3 = np.array(rgba).copy()
+            arr3[labeled != main, 3] = 0
+            rgba = Image.fromarray(arr3, "RGBA")
+        w, h = rgba.size
+        target_h = int(frame_size * 0.82)
+        if not is_lying and h > 10:
+            scale = min(target_h / h, (frame_size - margin) / max(w, 1))
+        else:
+            scale = (frame_size - margin * 2) / max(w, 1)
+        new_w, new_h = max(1, int(w * scale)), max(1, int(h * scale))
+        scaled = rgba.resize((new_w, new_h), NEAREST)
+        canvas = Image.new("RGBA", (frame_size, frame_size), (0, 0, 0, 0))
+        px = (frame_size - new_w) // 2
+        py = max(0, frame_size - new_h - margin)
+        canvas.paste(scaled, (px, py), mask=scaled)
+        return canvas
+
+    frames = {}
+    for row_idx, row_names in enumerate(FRAME_NAMES_4x2):
+        y1 = row_bounds[row_idx]
+        y2 = result.height if row_idx == 3 else row_bounds[row_idx + 1]
+        cb = _row_col_bounds_2(y1, y2)
+        for col_idx, name in enumerate(row_names):
+            x1 = cb[col_idx]
+            x2 = result.width if col_idx == 1 else cb[col_idx + 1]
+            cell = result.crop((x1, y1, x2, y2))
+            frame = _process(cell, is_lying=(name == "lying_down"))
+            frames[name] = frame
+            frame.save(os.path.join(out_dir, f"frame_{name}.png"))
+
+    ANIM_MAP = {
+        "idle_1":  "walk_down_1",
+        "walk_1":  "walk_left_1",
+        "walk_2":  "jump_left",
+        "walk_3":  "walk_left_1",
+        "sleep_1": "lying_down",
+        "react_1": "arms_raised",
+        "react_2": "walk_down_1",
+    }
+    WALK_ANIM = {"walk_1", "walk_2", "walk_3"}
+    for anim_name, src in ANIM_MAP.items():
+        frame = frames[src].copy()
+        if anim_name in WALK_ANIM:
+            frame = frame.transpose(Image.FLIP_LEFT_RIGHT)
+        frame.save(os.path.join(out_dir, f"{anim_name}.png"))
+
+    return frames
 
 
 def _split_frames_2x2(result, out_dir, frame_size=128, margin=8):
@@ -226,6 +327,10 @@ def split_frames(result, out_dir, frame_size=128, margin=8):
     row_heights = [row_bounds[i + 1] - row_bounds[i] for i in range(len(row_bounds) - 1)]
     if min(row_heights) < 60:
         return _split_frames_2x2(result, out_dir, frame_size, margin)
+
+    col_count = _detect_col_count(result)
+    if col_count == 2:
+        return _split_frames_4x2(result, out_dir, frame_size, margin, row_bounds)
 
     def _row_col_bounds(row_y1, row_y2, n=4, pad=5):
         """특정 행의 밀도로 컬럼 경계를 독립 검출."""
