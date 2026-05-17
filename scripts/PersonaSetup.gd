@@ -3,7 +3,7 @@ extends Node
 const PersonaGenerator = preload("res://scripts/PersonaGenerator.gd")
 const UserProfile = preload("res://scripts/UserProfile.gd")
 
-signal setup_completed(gender: String, reference_image_path: String, appearance: String)
+signal setup_completed(reference_image_path: String)
 
 # 픽셀 RPG 팔레트
 const BG_COLOR      := Color(0.05, 0.05, 0.10)
@@ -28,14 +28,11 @@ const CONFIRM_H    := 86
 var _pixel_font: Font
 
 var _name_field: LineEdit
-var _appearance_field: LineEdit
 var _hf_token_field: LineEdit
 var _user_name_field: LineEdit
 var _confirm_btn: Button
 var _reference_image_path: String = ""
 var _ref_preview: TextureRect
-var _gender: String = "female"
-var _gender_btns: Dictionary = {}
 
 func _ready() -> void:
 	_pixel_font = load("res://assets/fonts/PixelifySans-Regular.ttf")
@@ -169,8 +166,6 @@ func _build_ui() -> void:
 	_add_title(vbox)
 	_add_section(vbox, "▶ 이름", _build_name_content())
 	_add_section(vbox, "▶ 캐릭터 이미지", _build_image_content())
-	_add_section(vbox, "▶ 성별", _build_gender_content())
-	_add_section(vbox, "▶ 외형 설명  (선택)", _build_appearance_content())
 	_add_section(vbox, "▶ HuggingFace 토큰", _build_token_content())
 	_add_section(vbox, "▶ 내 이름  (선택)", _build_username_content())
 
@@ -276,40 +271,6 @@ func _build_image_content() -> Control:
 
 	return vbox
 
-func _build_gender_content() -> Control:
-	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 12)
-	for entry in [["여자", "female"], ["남자", "male"]]:
-		var label: String = entry[0]
-		var val: String   = entry[1]
-		var btn := Button.new()
-		btn.text = label
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.custom_minimum_size = Vector2(0, BTN_HEIGHT)
-		_apply_font(btn, FONT_BTN)
-		_gender_btns[val] = btn
-		btn.pressed.connect(func(): _select_gender(val))
-		hbox.add_child(btn)
-	_select_gender("female")
-	return hbox
-
-func _select_gender(val: String) -> void:
-	_gender = val
-	for v in _gender_btns:
-		var btn: Button = _gender_btns[v]
-		if v == val:
-			_apply_pixel_btn(btn, ACCENT_COLOR.darkened(0.2), ACCENT_COLOR, TEXT_COLOR)
-		else:
-			_apply_pixel_btn(btn, PANEL_COLOR, BORDER_DIM, MUTED_COLOR)
-
-func _build_appearance_content() -> Control:
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
-	vbox.add_child(_make_label("핵심 특징 3~5개  —  머리색, 눈색, 옷 위주로 영어 태그로", FONT_SUB, MUTED_COLOR, true))
-	_appearance_field = _make_input_field("예: red hair, red eyes, white shirt, black tie", FONT_INPUT)
-	vbox.add_child(_appearance_field)
-	return vbox
-
 func _build_token_content() -> Control:
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 6)
@@ -349,13 +310,12 @@ func _on_confirm_pressed() -> void:
 	var tf := FileAccess.open("user://hf_token.txt", FileAccess.WRITE)
 	if tf:
 		tf.store_string(hf_token)
-	PersonaGenerator.save_persona(name, {}, _gender)
+	PersonaGenerator.save_persona(name, {}, "")
 	var user_name := _user_name_field.text.strip_edges()
 	if not user_name.is_empty():
 		var profile := UserProfile.new()
 		profile.set_name(user_name)
-	var appearance := _appearance_field.text.strip_edges()
-	setup_completed.emit(_gender, _reference_image_path, appearance)
+	setup_completed.emit(_reference_image_path)
 
 func _shake(target: Control) -> void:
 	var original_x := target.position.x

@@ -9,7 +9,7 @@ var _status_file: String
 var _poll_timer: Timer
 
 
-func generate(gender: String, reference_image_path: String = "", appearance: String = "") -> void:
+func generate(reference_image_path: String = "", seed: int = -1) -> void:
 	_status_file = OS.get_user_data_dir() + "/gen_status.txt"
 
 	if FileAccess.file_exists(_status_file):
@@ -22,10 +22,10 @@ func generate(gender: String, reference_image_path: String = "", appearance: Str
 	_poll_timer.start()
 
 	_thread = Thread.new()
-	_thread.start(_run_generation.bind(gender, reference_image_path, appearance))
+	_thread.start(_run_generation.bind(reference_image_path, seed))
 
 
-func _run_generation(gender: String, reference_image_path: String, appearance: String) -> void:
+func _run_generation(reference_image_path: String, seed: int) -> void:
 	var python := _find_python()
 	if python.is_empty():
 		call_deferred("_on_failed", "Python 3을 찾을 수 없어요.\npython.org에서 설치 후 재시작해주세요.")
@@ -36,7 +36,6 @@ func _run_generation(gender: String, reference_image_path: String, appearance: S
 	var hf_token := _load_token()
 
 	var args := [script,
-		"--gender",  gender,
 		"--output",  out_dir,
 		"--status-file", _status_file,
 	]
@@ -44,8 +43,8 @@ func _run_generation(gender: String, reference_image_path: String, appearance: S
 		args.append_array(["--hf-token", hf_token])
 	if not reference_image_path.is_empty():
 		args.append_array(["--reference-image", reference_image_path])
-	if not appearance.is_empty():
-		args.append_array(["--appearance", appearance])
+	if seed >= 0:
+		args.append_array(["--seed", str(seed)])
 
 	var exit_code := OS.execute(python, args)
 

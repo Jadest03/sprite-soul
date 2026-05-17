@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 SpriteSoul - Local Sprite Generator
-Usage: python generate_sprites.py --gender female --output ./sprites
+Usage: python generate_sprites.py --reference-image ./char.png --output ./sprites
 """
 
 import argparse
@@ -42,11 +42,9 @@ def detect_device():
         return "cpu", torch.float32
 
 
-def build_prompt(gender: str = "female", appearance: str = "") -> str:
-    g = "female" if gender.strip().lower() in ("female", "girl", "woman", "f", "여자") else "male"
-    app = f"{appearance.strip()}, " if appearance.strip() else ""
+def build_prompt() -> str:
     return (
-        f"{app}Create a pixel art spritesheet of the {g} character in the image. "
+        "Create a pixel art spritesheet of the character in the image. "
         "The spritesheet is a 4 by 4 grid of four rows of frames - "
         "first row is 3 walking frames facing down and 1 frame both arms raised, "
         "second row is 3 walking frames facing left and 1 frame jumping left, "
@@ -94,7 +92,8 @@ def remove_white_bg(img):
     rgba = img.convert("RGBA")
     arr = np.array(rgba).copy()
     h, w = arr.shape[:2]
-    bg = (arr[:, :, 0] > 235) & (arr[:, :, 1] > 235) & (arr[:, :, 2] > 235)
+    # BFS로 테두리 연결된 흰색(>220) 픽셀 제거
+    bg = (arr[:, :, 0] > 220) & (arr[:, :, 1] > 220) & (arr[:, :, 2] > 220)
     visited = np.zeros((h, w), dtype=bool)
     queue = deque()
     for x in range(w):
@@ -113,7 +112,104 @@ def remove_white_bg(img):
             if 0 <= ny < h and 0 <= nx < w and not visited[ny, nx] and bg[ny, nx]:
                 queue.append((ny, nx))
     arr[visited, 3] = 0
+    # BFS 경계 인접 반투명 픽셀(edge fringe) 추가 제거
+    fringe = np.zeros((h, w), dtype=bool)
+    for dy, dx in ((-1,0),(1,0),(0,-1),(0,1)):
+        shifted = np.roll(visited, (dy, dx), axis=(0, 1))
+        fringe |= shifted
+    fringe &= ~visited
+    near_white = (arr[:, :, 0] > 200) & (arr[:, :, 1] > 200) & (arr[:, :, 2] > 200)
+    arr[fringe & near_white, 3] = 0
     return Image.fromarray(arr)
+
+
+def _split_frames_2x2(result, out_dir, frame_size=128, margin=8):
+    """2×2 layout (4 large poses): front, arms-raised, back, lying-down."""
+    arr = np.array(result.convert("RGB"))
+    content = ~((arr[:, :, 0] > 230) & (arr[:, :, 1] > 230) & (arr[:, :, 2] > 230))
+    col_den = content.sum(axis=0).astype(float)
+    row_den = content.sum(axis=1).astype(float)
+
+    nz_x = np.where(col_den > 2)[0]
+    nz_y = np.where(row_den > 2)[0]
+    x0, x1 = int(nz_x[0]), int(nz_x[-1])
+    y0, y1 = int(nz_y[0]), int(nz_y[-1])
+
+    # Find deepest valley in the middle 50% of each axis
+    xm, xr = (x0 + x1) // 2, (x1 - x0) // 4
+    x_valley = xm - xr + int(np.argmin(col_den[xm - xr: xm + xr]))
+    ym, yr = (y0 + y1) // 2, (y1 - y0) // 4
+    y_valley = ym - yr + int(np.argmin(row_den[ym - yr: ym + yr]))
+
+    raw_crops = {
+        "front": result.crop((x0,       y0,       x_valley, y_valley)),
+        "arms":  result.crop((x_valley, y0,       x1,       y_valley)),
+        "back":  result.crop((x0,       y_valley, x_valley, y1)),
+        "lying": result.crop((x_valley, y_valley, x1,       y1)),
+    }
+
+    def _process(crop_img, is_lying=False):
+        arr2 = np.array(crop_img.convert("RGB"))
+        cont = ~((arr2[:, :, 0] > 230) & (arr2[:, :, 1] > 230) & (arr2[:, :, 2] > 230))
+        row_a, col_a = np.any(cont, axis=1), np.any(cont, axis=0)
+        if not row_a.any():
+            return Image.new("RGBA", (frame_size, frame_size), (0, 0, 0, 0))
+        ry0, ry1 = int(np.where(row_a)[0][0]), int(np.where(row_a)[0][-1])
+        cx0, cx1 = int(np.where(col_a)[0][0]), int(np.where(col_a)[0][-1])
+        tc = crop_img.crop((cx0, ry0, cx1 + 1, ry1 + 1))
+
+        rgba = remove_white_bg(tc)
+        alpha = np.array(rgba)[:, :, 3] > 10
+        labeled, n = ndi.label(alpha)
+        if n > 1:
+            sizes = ndi.sum(alpha, labeled, range(1, n + 1))
+            main = int(np.argmax(sizes)) + 1
+            arr3 = np.array(rgba).copy()
+            arr3[labeled != main, 3] = 0
+            rgba = Image.fromarray(arr3, "RGBA")
+
+        w, h = rgba.size
+        target_h = int(frame_size * 0.82)
+        if not is_lying and h > 10:
+            scale = min(target_h / h, (frame_size - margin) / max(w, 1))
+        else:
+            scale = (frame_size - margin * 2) / max(w, 1)
+        new_w = max(1, int(w * scale))
+        new_h = max(1, int(h * scale))
+        scaled = rgba.resize((new_w, new_h), NEAREST)
+        canvas = Image.new("RGBA", (frame_size, frame_size), (0, 0, 0, 0))
+        px = (frame_size - new_w) // 2
+        py = max(0, frame_size - new_h - margin)
+        canvas.paste(scaled, (px, py), mask=scaled)
+        return canvas
+
+    processed = {
+        "front": _process(raw_crops["front"]),
+        "arms":  _process(raw_crops["arms"]),
+        "back":  _process(raw_crops["back"]),
+        "lying": _process(raw_crops["lying"], is_lying=True),
+    }
+
+    for name, img in processed.items():
+        img.save(os.path.join(out_dir, f"frame_{name}.png"))
+
+    ANIM_MAP = {
+        "idle_1":  "front",
+        "walk_1":  "front",
+        "walk_2":  "front",
+        "walk_3":  "front",
+        "sleep_1": "lying",
+        "react_1": "arms",
+        "react_2": "front",
+    }
+    WALK_ANIM = {"walk_1", "walk_2", "walk_3"}
+    for anim_name, src in ANIM_MAP.items():
+        frame = processed[src].copy()
+        if anim_name in WALK_ANIM:
+            frame = frame.transpose(Image.FLIP_LEFT_RIGHT)
+        frame.save(os.path.join(out_dir, f"{anim_name}.png"))
+
+    return processed
 
 
 def split_frames(result, out_dir, frame_size=128, margin=8):
@@ -124,6 +220,12 @@ def split_frames(result, out_dir, frame_size=128, margin=8):
         ["walk_back_1", "walk_back_2", "walk_back_3", "lying_down"],
     ]
     col_bounds, row_bounds = detect_grid_valleys(result)
+
+    # 2×2 layout detection: if any detected row section is too thin, the LoRA
+    # generated 4 large poses (front/arms/back/lying) instead of 16 walk-cycle frames.
+    row_heights = [row_bounds[i + 1] - row_bounds[i] for i in range(len(row_bounds) - 1)]
+    if min(row_heights) < 60:
+        return _split_frames_2x2(result, out_dir, frame_size, margin)
 
     def _row_col_bounds(row_y1, row_y2, n=4, pad=5):
         """특정 행의 밀도로 컬럼 경계를 독립 검출."""
@@ -328,7 +430,6 @@ def generate(args):
     device, dtype = detect_device()
     log(f"디바이스: {device.upper()}")
 
-    use_image_ref = bool(args.reference_image)
     steps = args.steps if args.steps else (28 if device != "cpu" else 20)
     if device == "cpu":
         log(f"CPU 모드: {steps}스텝 (시간이 오래 걸릴 수 있어요)")
@@ -371,7 +472,7 @@ def generate(args):
         t.join(timeout=1)
     log("모델 로드 완료")
 
-    prompt = build_prompt(args.gender, args.appearance)
+    prompt = build_prompt()
     generator = torch.Generator(device).manual_seed(args.seed)
 
     def on_step_end(pipe, step, timestep, callback_kwargs):
@@ -381,8 +482,8 @@ def generate(args):
     log(f"스프라이트 생성 시작 ({steps}스텝)")
 
     ref_img = None
-    if use_image_ref:
-        ref_img = Image.open(args.reference_image).convert("RGB").resize((256, 256), Image.LANCZOS)
+    if args.reference_image:
+        ref_img = Image.open(args.reference_image).convert("RGB").resize((512, 512), Image.LANCZOS)
 
     result = pipe(
         prompt=prompt,
@@ -412,8 +513,7 @@ def generate(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SpriteSoul Sprite Generator")
-    parser.add_argument("--gender",     default="female", help="캐릭터 성별 (female/male)")
-    parser.add_argument("--appearance", default="",       help="외형 설명 (예: red hair, blue eyes)")
+
     parser.add_argument("--output",    default="./sprites", help="출력 디렉토리")
     parser.add_argument("--seed",      type=int, default=42)
     parser.add_argument("--steps",     type=int, default=None, help="추론 스텝 (기본: GPU=64, CPU=20)")
