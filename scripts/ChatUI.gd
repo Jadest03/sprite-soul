@@ -122,7 +122,12 @@ func _send_to_ollama(user_msg: String) -> void:
 	var body := JSON.stringify({
 		"model": OLLAMA_MODEL,
 		"messages": messages,
-		"stream": false
+		"stream": false,
+		"options": {
+			"num_ctx": 8192,
+			"num_predict": 150,
+			"temperature": 0.8,
+		}
 	})
 	var err := _http.request(OLLAMA_URL, ["Content-Type: application/json"], HTTPClient.METHOD_POST, body)
 	if err != OK:
