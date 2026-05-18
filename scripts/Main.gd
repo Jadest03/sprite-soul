@@ -49,14 +49,9 @@ func _notification(what: int) -> void:
 		get_tree().quit()
 
 func _unload_ollama_model() -> void:
-	var http := HTTPRequest.new()
-	add_child(http)
-	var body := JSON.stringify({
-		"model": "qwen3-vl:8b-instruct",
-		"messages": [],
-		"keep_alive": 0
-	})
-	http.request("http://localhost:11434/api/chat", ["Content-Type: application/json"], HTTPClient.METHOD_POST, body)
+	var body := '{"model":"qwen3-vl:8b-instruct","messages":[],"keep_alive":0}'
+	OS.execute("/usr/bin/curl", ["-s", "-X", "POST", "http://localhost:11434/api/chat",
+		"-H", "Content-Type: application/json", "-d", body])
 
 # --- Setup mode ---
 
