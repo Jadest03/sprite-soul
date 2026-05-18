@@ -7,7 +7,7 @@ const UserProfile = preload("res://scripts/UserProfile.gd")
 const BUBBLE_HIDE_DELAY := 5.0
 const TYPING_INTERVAL := 0.03
 const OLLAMA_URL := "http://localhost:11434/api/chat"
-const OLLAMA_MODEL := "sprite-soul"
+const OLLAMA_MODEL := "qwen3-vl:8b-instruct"
 
 var companion: Node2D = null
 
