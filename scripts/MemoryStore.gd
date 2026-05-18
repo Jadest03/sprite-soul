@@ -33,6 +33,7 @@ func _save() -> void:
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(_persistent))
+		file.close()
 
 func _load() -> void:
 	if not FileAccess.file_exists(SAVE_PATH):
@@ -41,5 +42,6 @@ func _load() -> void:
 	if not file:
 		return
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
 	if parsed is Array:
 		_persistent = parsed

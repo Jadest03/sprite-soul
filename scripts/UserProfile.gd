@@ -37,6 +37,7 @@ func _save() -> void:
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify({"name": user_name, "notes": notes}))
+		file.close()
 
 func _load() -> void:
 	if not FileAccess.file_exists(SAVE_PATH):
@@ -45,6 +46,7 @@ func _load() -> void:
 	if not file:
 		return
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
 	if not parsed is Dictionary:
 		return
 	user_name = parsed.get("name", "")

@@ -291,7 +291,11 @@ func _load_saved_token() -> String:
 	if not FileAccess.file_exists(TOKEN_PATH):
 		return OS.get_environment("HF_TOKEN")
 	var f := FileAccess.open(TOKEN_PATH, FileAccess.READ)
-	return f.get_as_text().strip_edges() if f else ""
+	if not f:
+		return ""
+	var token := f.get_as_text().strip_edges()
+	f.close()
+	return token
 
 # ── 이벤트 ───────────────────────────────────────────────
 
@@ -310,6 +314,7 @@ func _on_confirm_pressed() -> void:
 	var tf := FileAccess.open("user://hf_token.txt", FileAccess.WRITE)
 	if tf:
 		tf.store_string(hf_token)
+		tf.close()
 	PersonaGenerator.save_persona(name, {}, "")
 	var user_name := _user_name_field.text.strip_edges()
 	if not user_name.is_empty():
