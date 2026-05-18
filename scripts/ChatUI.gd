@@ -3,6 +3,7 @@ extends CanvasLayer
 const PersonaGenerator = preload("res://scripts/PersonaGenerator.gd")
 const MemoryStore = preload("res://scripts/MemoryStore.gd")
 const UserProfile = preload("res://scripts/UserProfile.gd")
+const CompanionFSM = preload("res://scripts/CompanionFSM.gd")
 
 const BUBBLE_HIDE_DELAY := 5.0
 const TYPING_INTERVAL := 0.03
@@ -135,6 +136,7 @@ func _send_to_ollama(user_msg: String) -> void:
 		"model": OLLAMA_MODEL,
 		"messages": messages,
 		"stream": false,
+		"keep_alive": "2m",
 		"options": {
 			"num_ctx": 8192,
 			"num_predict": 150,
@@ -230,6 +232,7 @@ func _analyze_screen(path: String) -> void:
 		"model": OLLAMA_MODEL,
 		"messages": [{"role": "user", "content": prompt, "images": [b64]}],
 		"stream": false,
+		"keep_alive": "2m",
 		"options": {"num_ctx": 4096, "num_predict": 80, "temperature": 0.7}
 	})
 	var err := _screen_http.request(OLLAMA_URL, ["Content-Type: application/json"], HTTPClient.METHOD_POST, body)
@@ -253,8 +256,10 @@ func _on_screen_analyzed(_result: int, response_code: int, _headers: PackedStrin
 			comment = s.substr(8).strip_edges()
 	var context_changed := _screen_context != _last_screen_context
 	_last_screen_context = _screen_context
+	var is_sleeping: bool = companion != null and companion.fsm.current_state == CompanionFSM.State.SLEEP
 	if not comment.is_empty() and comment != _last_proactive and context_changed \
-			and randf() < PROACTIVE_CHANCE and not _waiting and not _is_typing and not _input_row.visible:
+			and randf() < PROACTIVE_CHANCE and not _waiting and not _is_typing \
+			and not _input_row.visible and not is_sleeping:
 		_last_proactive = comment
 		_memory.add("assistant", comment)
 		EventBus.chat_response_received.emit(comment)
