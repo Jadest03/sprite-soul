@@ -351,6 +351,10 @@ func _launch_companion() -> void:
 func _on_reset_requested() -> void:
 	PersonaGenerator.delete_persona()
 	_delete_sprites_dir()
+	for fname: String in ["user_profile.json", "memory.json"]:
+		var path: String = "user://" + fname
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	for child in get_children():
 		child.queue_free()
 	await get_tree().process_frame

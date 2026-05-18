@@ -8,6 +8,8 @@ const BUBBLE_HIDE_DELAY := 5.0
 const TYPING_INTERVAL := 0.03
 const OLLAMA_URL := "http://localhost:11434/api/chat"
 const OLLAMA_MODEL := "qwen3-vl:8b-instruct"
+const SCREEN_INTERVAL := 60.0
+const PROACTIVE_CHANCE := 0.35
 
 var companion: Node2D = null
 
@@ -28,6 +30,13 @@ var _memory: MemoryStore
 var _profile: UserProfile
 var _system_prompt := ""
 
+var _screen_context := ""
+var _screen_http: HTTPRequest
+var _screen_timer: Timer
+var _screen_analyzing := false
+var _last_proactive := ""
+var _last_screen_context := ""
+
 func _ready() -> void:
 	layer = 10
 	_build_bubble()
@@ -38,6 +47,7 @@ func _ready() -> void:
 	_profile = UserProfile.new()
 	EventBus.companion_clicked.connect(_on_companion_clicked)
 	EventBus.chat_response_received.connect(show_response)
+	_setup_screen_awareness()
 
 func _process(delta: float) -> void:
 	if companion and _bubble.visible:
@@ -118,6 +128,8 @@ func _send_to_ollama(user_msg: String) -> void:
 	_show_thinking()
 
 	var full_prompt := _system_prompt + _profile.to_prompt_fragment()
+	if not _screen_context.is_empty():
+		full_prompt += "\n\n[현재 화면]\n" + _screen_context
 	var messages := _memory.build_messages(full_prompt)
 	var body := JSON.stringify({
 		"model": OLLAMA_MODEL,
@@ -126,7 +138,7 @@ func _send_to_ollama(user_msg: String) -> void:
 		"options": {
 			"num_ctx": 8192,
 			"num_predict": 150,
-			"temperature": 0.8,
+			"temperature": 0.9,
 		}
 	})
 	var err := _http.request(OLLAMA_URL, ["Content-Type: application/json"], HTTPClient.METHOD_POST, body)
@@ -173,6 +185,79 @@ func _on_http_completed(result: int, response_code: int, _headers: PackedStringA
 
 	_memory.add("assistant", reply)
 	EventBus.chat_response_received.emit(reply)
+
+# --- 화면 인식 ---
+
+func _setup_screen_awareness() -> void:
+	_screen_http = HTTPRequest.new()
+	add_child(_screen_http)
+	_screen_http.request_completed.connect(_on_screen_analyzed)
+
+	_screen_timer = Timer.new()
+	_screen_timer.wait_time = SCREEN_INTERVAL
+	_screen_timer.one_shot = false
+	_screen_timer.timeout.connect(_capture_and_analyze)
+	add_child(_screen_timer)
+	_screen_timer.start()
+
+func _capture_and_analyze() -> void:
+	if _screen_analyzing or _waiting or _is_typing:
+		return
+	var path := "/tmp/sprite_soul_screen.png"
+	OS.execute("/usr/sbin/screencapture", ["-x", path])
+	if not FileAccess.file_exists(path):
+		return
+	OS.execute("/usr/bin/sips", ["-Z", "1280", path])
+	_analyze_screen(path)
+
+func _analyze_screen(path: String) -> void:
+	_screen_analyzing = true
+	var file := FileAccess.open(path, FileAccess.READ)
+	if not file:
+		_screen_analyzing = false
+		return
+	var b64 := Marshalls.raw_to_base64(file.get_buffer(file.get_length()))
+	file.close()
+
+	var persona_name: String = PersonaGenerator.load_persona().get("name", "나")
+	var prompt := (
+		"Look at this screenshot and answer in Korean with exactly this format:\n"
+		+ "CONTEXT: [what the user is doing, one line]\n"
+		+ "COMMENT: [a casual remark from " + persona_name + "'s perspective in informal Korean, or leave blank]\n\n"
+		+ "Example:\nCONTEXT: 유튜브로 영상 보는 중\nCOMMENT: 야 뭐 보고 있어?"
+	)
+	var body := JSON.stringify({
+		"model": OLLAMA_MODEL,
+		"messages": [{"role": "user", "content": prompt, "images": [b64]}],
+		"stream": false,
+		"options": {"num_ctx": 4096, "num_predict": 80, "temperature": 0.7}
+	})
+	var err := _screen_http.request(OLLAMA_URL, ["Content-Type: application/json"], HTTPClient.METHOD_POST, body)
+	if err != OK:
+		_screen_analyzing = false
+
+func _on_screen_analyzed(_result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	_screen_analyzing = false
+	if response_code != 200:
+		return
+	var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
+	if not parsed is Dictionary:
+		return
+	var reply: String = parsed.get("message", {}).get("content", "")
+	var comment := ""
+	for line in reply.split("\n"):
+		var s := line.strip_edges()
+		if s.begins_with("CONTEXT:"):
+			_screen_context = s.substr(8).strip_edges()
+		elif s.begins_with("COMMENT:"):
+			comment = s.substr(8).strip_edges()
+	var context_changed := _screen_context != _last_screen_context
+	_last_screen_context = _screen_context
+	if not comment.is_empty() and comment != _last_proactive and context_changed \
+			and randf() < PROACTIVE_CHANCE and not _waiting and not _is_typing and not _input_row.visible:
+		_last_proactive = comment
+		_memory.add("assistant", comment)
+		EventBus.chat_response_received.emit(comment)
 
 func _show_thinking() -> void:
 	_full_text = "..."
