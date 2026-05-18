@@ -35,12 +35,28 @@ var _pixel_font: Font
 
 func _ready() -> void:
 	_pixel_font = load("res://assets/fonts/PixelifySans-Regular.ttf")
+	get_tree().set_auto_accept_quit(false)
 	if PersonaGenerator.has_saved_persona():
 		_setup_companion_window()
 		_launch_companion()
 	else:
 		_setup_setup_window()
 		_launch_setup()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_unload_ollama_model()
+		get_tree().quit()
+
+func _unload_ollama_model() -> void:
+	var http := HTTPRequest.new()
+	add_child(http)
+	var body := JSON.stringify({
+		"model": "qwen3-vl:8b-instruct",
+		"messages": [],
+		"keep_alive": 0
+	})
+	http.request("http://localhost:11434/api/chat", ["Content-Type: application/json"], HTTPClient.METHOD_POST, body)
 
 # --- Setup mode ---
 
