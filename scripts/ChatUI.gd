@@ -5,6 +5,7 @@ const MemoryStore = preload("res://scripts/MemoryStore.gd")
 const UserProfile = preload("res://scripts/UserProfile.gd")
 const CompanionFSM = preload("res://scripts/CompanionFSM.gd")
 const PixelSpeechBubble = preload("res://scripts/PixelSpeechBubble.gd")
+const PixelInputBox = preload("res://scripts/PixelInputBox.gd")
 
 const BUBBLE_HIDE_DELAY := 5.0
 const TYPING_INTERVAL := 0.03
@@ -17,8 +18,8 @@ var companion: Node2D = null
 
 var _bubble: MarginContainer
 var _psb: PixelSpeechBubble
-var _input_row: PanelContainer
-var _input_field: LineEdit
+var _input_row: Control
+var _pib: PixelInputBox
 var _http: HTTPRequest
 
 var _full_text := ""
@@ -91,8 +92,8 @@ func _on_companion_clicked() -> void:
 		return
 	_hide_timer = 0.0
 	_set_input_visible(true)
-	_input_field.grab_focus()
-	_input_field.clear()
+	_pib.focus_input()
+	_pib.clear()
 
 func show_response(text: String) -> void:
 	_full_text = text
@@ -301,36 +302,9 @@ func _build_bubble() -> void:
 	add_child(_bubble)
 
 func _build_input() -> void:
-	_input_row = PanelContainer.new()
-	_input_row.size = Vector2(292, 44)
-	_input_row.hide()
-	add_child(_input_row)
-
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.08, 0.12, 0.90)
-	style.corner_radius_top_left    = 6
-	style.corner_radius_top_right   = 6
-	style.corner_radius_bottom_left = 6
-	style.corner_radius_bottom_right = 6
-	style.set_content_margin_all(0)
-	_input_row.add_theme_stylebox_override("panel", style)
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left",   8)
-	margin.add_theme_constant_override("margin_right",  8)
-	margin.add_theme_constant_override("margin_top",    5)
-	margin.add_theme_constant_override("margin_bottom", 5)
-	_input_row.add_child(margin)
-
-	_input_field = LineEdit.new()
-	_input_field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_input_field.placeholder_text = "말 걸기..."
-	_input_field.add_theme_font_size_override("font_size", 15)
-	_input_field.add_theme_color_override("font_color", Color.WHITE)
-	_input_field.add_theme_color_override("font_placeholder_color", Color(0.55, 0.55, 0.6))
-	var empty := StyleBoxEmpty.new()
-	_input_field.add_theme_stylebox_override("normal",    empty)
-	_input_field.add_theme_stylebox_override("focus",     empty)
-	_input_field.add_theme_stylebox_override("read_only", empty)
-	_input_field.text_submitted.connect(_on_input_submitted)
-	margin.add_child(_input_field)
+	_pib = PixelInputBox.new()
+	_input_row = _pib
+	_pib.hide()
+	_pib.text_submitted.connect(_on_input_submitted)
+	_pib.resized.connect(_update_input_position)
+	add_child(_pib)

@@ -70,18 +70,22 @@ func _draw() -> void:
 	draw_rect(Rect2(p*2, p*3, p, h - p*5), C_INNER)
 	draw_rect(Rect2(w - p*3, p*3, p, h - p*5), C_INNER)
 
-	# Border edges (stop short of corners by 1 pixel unit → 2-step rounding)
-	draw_rect(Rect2(p*2, 0, w - p*4, p*2), C_BORDER)
-	draw_rect(Rect2(0, p*2, p*2, h - p*4), C_BORDER)
-	draw_rect(Rect2(w - p*2, p*2, p*2, h - p*4), C_BORDER)
-	draw_rect(Rect2(p*2, h - p*2, tc - hw - p*2, p*2), C_BORDER)
-	draw_rect(Rect2(tc + hw, h - p*2, w - tc - hw - p*2, p*2), C_BORDER)
+	# Border edges (stop short by 2 pixel units → 3-step rounding)
+	draw_rect(Rect2(p*3, 0, w - p*6, p*2), C_BORDER)
+	draw_rect(Rect2(0, p*3, p*2, h - p*6), C_BORDER)
+	draw_rect(Rect2(w - p*2, p*3, p*2, h - p*6), C_BORDER)
+	draw_rect(Rect2(p*3, h - p*2, tc - hw - p*3, p*2), C_BORDER)
+	draw_rect(Rect2(tc + hw, h - p*2, w - tc - hw - p*3, p*2), C_BORDER)
 
-	# Corner connectors (1 pixel unit each)
-	draw_rect(Rect2(p, p, p, p), C_BORDER)
-	draw_rect(Rect2(w - p*2, p, p, p), C_BORDER)
-	draw_rect(Rect2(p, h - p*2, p, p), C_BORDER)
-	draw_rect(Rect2(w - p*2, h - p*2, p, p), C_BORDER)
+	# Corner connectors (2 per corner → 3-step staircase)
+	draw_rect(Rect2(p*2, p, p, p), C_BORDER)      # top-left  A
+	draw_rect(Rect2(p, p*2, p, p), C_BORDER)       # top-left  B
+	draw_rect(Rect2(w - p*3, p, p, p), C_BORDER)   # top-right A
+	draw_rect(Rect2(w - p*2, p*2, p, p), C_BORDER) # top-right B
+	draw_rect(Rect2(p*2, h - p*2, p, p), C_BORDER) # bot-left  A
+	draw_rect(Rect2(p, h - p*3, p, p), C_BORDER)   # bot-left  B
+	draw_rect(Rect2(w - p*3, h - p*2, p, p), C_BORDER) # bot-right A
+	draw_rect(Rect2(w - p*2, h - p*3, p, p), C_BORDER) # bot-right B
 
 	# Fill the tail gap
 	draw_rect(Rect2(tc - hw, h - p*2, hw * 2, p*2), C_FILL)
