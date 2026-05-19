@@ -4,6 +4,7 @@ const PersonaGenerator = preload("res://scripts/PersonaGenerator.gd")
 const MemoryStore = preload("res://scripts/MemoryStore.gd")
 const UserProfile = preload("res://scripts/UserProfile.gd")
 const CompanionFSM = preload("res://scripts/CompanionFSM.gd")
+const PixelSpeechBubble = preload("res://scripts/PixelSpeechBubble.gd")
 
 const BUBBLE_HIDE_DELAY := 5.0
 const TYPING_INTERVAL := 0.03
@@ -14,8 +15,8 @@ const PROACTIVE_CHANCE := 0.35
 
 var companion: Node2D = null
 
-var _bubble: PanelContainer
-var _bubble_label: Label
+var _bubble: MarginContainer
+var _psb: PixelSpeechBubble
 var _input_row: PanelContainer
 var _input_field: LineEdit
 var _http: HTTPRequest
@@ -58,7 +59,7 @@ func _process(delta: float) -> void:
 		_typing_timer -= delta
 		if _typing_timer <= 0.0:
 			_displayed_chars = mini(_displayed_chars + 1, _full_text.length())
-			_bubble_label.text = _full_text.substr(0, _displayed_chars)
+			_psb.set_text(_full_text.substr(0, _displayed_chars))
 			if _displayed_chars >= _full_text.length():
 				_is_typing = false
 				_hide_timer = BUBBLE_HIDE_DELAY
@@ -69,6 +70,7 @@ func _process(delta: float) -> void:
 		_hide_timer -= delta
 		if _hide_timer <= 0.0:
 			_bubble.hide()
+			_psb.set_text("")
 
 func _update_input_position() -> void:
 	var vh := get_viewport().get_visible_rect().size.y
@@ -98,7 +100,7 @@ func show_response(text: String) -> void:
 	_is_typing = true
 	_typing_timer = TYPING_INTERVAL
 	_hide_timer = 0.0
-	_bubble_label.text = ""
+	_psb.set_text("")
 	_bubble.show()
 	_set_input_visible(false)
 
@@ -203,7 +205,8 @@ func _setup_screen_awareness() -> void:
 	_screen_timer.start()
 
 func _capture_and_analyze() -> void:
-	if _screen_analyzing or _waiting or _is_typing:
+	var is_sleeping: bool = companion != null and companion.fsm.current_state == CompanionFSM.State.SLEEP
+	if _screen_analyzing or _waiting or _is_typing or is_sleeping:
 		return
 	var path := "/tmp/sprite_soul_screen.png"
 	OS.execute("/usr/sbin/screencapture", ["-x", path])
@@ -269,7 +272,7 @@ func _show_thinking() -> void:
 	_displayed_chars = 3
 	_is_typing = false
 	_hide_timer = 0.0
-	_bubble_label.text = "..."
+	_psb.set_text("...")
 	_bubble.show()
 
 func _on_ollama_error() -> void:
@@ -292,33 +295,10 @@ func _input(event: InputEvent) -> void:
 # --- UI 빌드 ---
 
 func _build_bubble() -> void:
-	_bubble = PanelContainer.new()
-	_bubble.custom_minimum_size = Vector2(160, 0)
+	_psb = PixelSpeechBubble.new()
+	_bubble = _psb
 	_bubble.hide()
 	add_child(_bubble)
-
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.08, 0.12, 0.90)
-	style.corner_radius_top_left    = 10
-	style.corner_radius_top_right   = 10
-	style.corner_radius_bottom_left = 10
-	style.corner_radius_bottom_right = 10
-	style.set_content_margin_all(0)
-	_bubble.add_theme_stylebox_override("panel", style)
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left",   12)
-	margin.add_theme_constant_override("margin_right",  12)
-	margin.add_theme_constant_override("margin_top",    8)
-	margin.add_theme_constant_override("margin_bottom", 8)
-	_bubble.add_child(margin)
-
-	_bubble_label = Label.new()
-	_bubble_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_bubble_label.add_theme_color_override("font_color", Color.WHITE)
-	_bubble_label.add_theme_font_size_override("font_size", 17)
-	_bubble_label.custom_minimum_size = Vector2(180, 0)
-	margin.add_child(_bubble_label)
 
 func _build_input() -> void:
 	_input_row = PanelContainer.new()

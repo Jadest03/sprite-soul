@@ -1,6 +1,7 @@
 extends Node2D
 
 signal reset_requested
+signal quit_requested
 
 const CompanionFSM = preload("res://scripts/CompanionFSM.gd")
 const EmotionState = preload("res://scripts/EmotionState.gd")
@@ -157,11 +158,7 @@ func _input(event: InputEvent) -> void:
 func _on_context_menu_pressed(id: int) -> void:
 	match id:
 		0: reset_requested.emit()
-		1:
-			var body := '{"model":"qwen3-vl:8b-instruct","messages":[],"keep_alive":0}'
-			OS.execute("/usr/bin/curl", ["-s", "-X", "POST", "http://localhost:11434/api/chat",
-				"-H", "Content-Type: application/json", "-d", body])
-			get_tree().quit()
+		1: quit_requested.emit()
 
 func _on_chat_requested(_text: String) -> void:
 	_reset_sleep_timer()

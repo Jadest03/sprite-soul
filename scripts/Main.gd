@@ -355,9 +355,14 @@ func _launch_companion() -> void:
 	var companion := CompanionScene.instantiate()
 	add_child(companion)
 	companion.reset_requested.connect(_on_reset_requested)
+	companion.quit_requested.connect(_on_quit_requested)
 	var chat_ui := ChatUIScene.instantiate()
 	add_child(chat_ui)
 	chat_ui.companion = companion
+
+func _on_quit_requested() -> void:
+	_unload_ollama_model()
+	get_tree().quit()
 
 func _on_reset_requested() -> void:
 	PersonaGenerator.delete_persona()
