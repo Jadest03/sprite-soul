@@ -65,8 +65,14 @@ func _on_text_changed() -> void:
 	call_deferred("_sync_height")
 
 func _sync_height() -> void:
-	var content_h := maxf(_edit.get_content_height(), _line_height())
-	_apply_size(_edit.size.x, content_h)
+	var lh := _line_height()
+	var lspacing := _edit.get_theme_constant("line_spacing")
+	var visual_lines := 0
+	for i in _edit.get_line_count():
+		visual_lines += 1 + _edit.get_line_wrap_count(i)
+	visual_lines = maxi(visual_lines, 1)
+	var content_h := lh * visual_lines + lspacing * (visual_lines - 1)
+	_apply_size(_edit.size.x, maxf(content_h, lh))
 
 func _apply_size(content_w: float, content_h: float) -> void:
 	_edit.position = Vector2(float(MARGIN_X), float(MARGIN_Y))
