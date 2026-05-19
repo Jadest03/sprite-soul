@@ -6,3 +6,5 @@ Modelfile
 .godot/
 *.uid
 sprite_gen/.venv/
+build/
+.DS_Store
