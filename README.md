@@ -1,8 +1,10 @@
-# SpriteSoul
+<div align="center">
+  <img src="assets/sprite_soul_icon.png" width="120" />
 
-> A tiny pixel companion that lives on your desktop — watches what you do, remembers your conversations, and talks like a friend.
+  <h1>SpriteSoul</h1>
 
-<!-- screenshot or GIF here -->
+  <p>A tiny pixel companion that lives on your desktop —<br>watches what you do, remembers your conversations, and talks like a friend.</p>
+</div>
 
 ---
 
