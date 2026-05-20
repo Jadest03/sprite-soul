@@ -15,6 +15,9 @@ func generate(reference_image_path: String = "", seed: int = -1) -> void:
 	if FileAccess.file_exists(_status_file):
 		DirAccess.remove_absolute(_status_file)
 
+	# Extract script on the main thread (res:// reads can fail inside threads)
+	var script_path := _extract_script()
+
 	_poll_timer = Timer.new()
 	_poll_timer.wait_time = 0.5
 	_poll_timer.timeout.connect(_poll_status)
@@ -22,16 +25,14 @@ func generate(reference_image_path: String = "", seed: int = -1) -> void:
 	_poll_timer.start()
 
 	_thread = Thread.new()
-	_thread.start(_run_generation.bind(reference_image_path, seed))
+	_thread.start(_run_generation.bind(reference_image_path, seed, script_path))
 
 
-func _run_generation(reference_image_path: String, seed: int) -> void:
+func _run_generation(reference_image_path: String, seed: int, script: String) -> void:
 	var python := _find_python()
 	if python.is_empty():
 		call_deferred("_on_failed", "Python 3을 찾을 수 없어요.\npython.org에서 설치 후 재시작해주세요.")
 		return
-
-	var script := ProjectSettings.globalize_path("res://sprite_gen/generate_sprites.py")
 	var out_dir := OS.get_user_data_dir() + "/sprites"
 	var hf_token := _load_token()
 
@@ -46,12 +47,14 @@ func _run_generation(reference_image_path: String, seed: int) -> void:
 	if seed >= 0:
 		args.append_array(["--seed", str(seed)])
 
-	var exit_code := OS.execute(python, args)
+	var output: Array = []
+	var exit_code := OS.execute(python, args, output)
 
 	if exit_code == 0:
 		call_deferred("_on_completed")
 	else:
-		call_deferred("_on_failed", "스프라이트 생성에 실패했어요. (exit %d)" % exit_code)
+		var detail := "\n".join(output).strip_edges()
+		call_deferred("_on_failed", "스프라이트 생성에 실패했어요. (exit %d)\n%s" % [exit_code, detail])
 
 
 func _load_token() -> String:
@@ -62,10 +65,45 @@ func _load_token() -> String:
 			return f.get_as_text().strip_edges()
 	return OS.get_environment("HF_TOKEN")
 
+func _extract_script() -> String:
+	var dest := OS.get_user_data_dir() + "/generate_sprites.py"
+	# In editor: res:// globalizes to an absolute filesystem path
+	var globalized := ProjectSettings.globalize_path("res://sprite_gen/generate_sprites.py")
+	if globalized.is_absolute_path() and FileAccess.file_exists(globalized):
+		return globalized
+	# In exported .app: extract from PCK to user data dir
+	var src := FileAccess.open("res://sprite_gen/generate_sprites.py", FileAccess.READ)
+	if not src:
+		return dest
+	var data := src.get_buffer(src.get_length())
+	src = null
+	var dst := FileAccess.open(dest, FileAccess.WRITE)
+	if not dst:
+		return dest
+	dst.store_buffer(data)
+	dst = null
+	return dest
+
 func _find_python() -> String:
-	var venv := ProjectSettings.globalize_path("res://sprite_gen/.venv/bin/python")
-	if FileAccess.file_exists(venv):
-		return venv
+	# Build candidate venv paths: res://-based (editor) + relative to .app bundle
+	var candidates: Array[String] = []
+	candidates.append(ProjectSettings.globalize_path("res://sprite_gen/.venv/bin/python3"))
+	candidates.append(ProjectSettings.globalize_path("res://sprite_gen/.venv/bin/python"))
+
+	# Walk up from executable to find project root (handles both editor and exported .app)
+	var exe_dir := OS.get_executable_path().get_base_dir()
+	var d := exe_dir
+	for _i in 6:
+		d = d.get_base_dir()
+		candidates.append(d + "/sprite_gen/.venv/bin/python3")
+		candidates.append(d + "/sprite_gen/.venv/bin/python")
+
+	# Verify each candidate by actually executing it (FileAccess can't follow symlinks)
+	for c in candidates:
+		var out: Array = []
+		if OS.execute(c, ["--version"], out) == 0:
+			return c
+
 	for cmd in ["python3", "python"]:
 		var out: Array = []
 		if OS.execute(cmd, ["--version"], out) == 0:
