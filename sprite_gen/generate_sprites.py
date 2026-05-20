@@ -44,12 +44,19 @@ def detect_device():
 
 def build_prompt() -> str:
     return (
-        "Create a pixel art spritesheet of the character in the image. "
-        "The spritesheet is a 4 by 4 grid of four rows of frames - "
-        "first row is 3 walking frames facing down and 1 frame both arms raised, "
-        "second row is 3 walking frames facing left and 1 frame jumping left, "
-        "third row is 3 walking frames facing right and 1 frame jumping right, "
-        "fourth row is 3 walking frames back view facing up and 1 frame lying on floor."
+        "Pixel art RPG game character sprite sheet, 4x4 grid, white background between cells. "
+        "Row 1 (facing south, front view): "
+            "frame 1: neutral idle stance, arms relaxed at sides; "
+            "frame 2: walk cycle step left, arms relaxed; "
+            "frame 3: walk cycle step right, arms relaxed; "
+            "frame 4: victory pose, both arms raised up. "
+        "Row 2 (facing west, left view): "
+            "frame 1: neutral idle; frame 2-3: walk cycle; frame 4: jump. "
+        "Row 3 (facing east, right view): "
+            "frame 1: neutral idle; frame 2-3: walk cycle; frame 4: jump. "
+        "Row 4 (facing north, back view): "
+            "frame 1-3: walk cycle; frame 4: sleeping, lying face down. "
+        "Clean pixel art, consistent proportions, clear silhouette, same character across all frames."
     )
 
 
@@ -535,7 +542,7 @@ def generate(args):
     device, dtype = detect_device()
     log(f"디바이스: {device.upper()}")
 
-    steps = args.steps if args.steps else (28 if device != "cpu" else 20)
+    steps = args.steps if args.steps else (35 if device != "cpu" else 20)
     if device == "cpu":
         log(f"CPU 모드: {steps}스텝 (시간이 오래 걸릴 수 있어요)")
 
@@ -594,7 +601,7 @@ def generate(args):
         prompt=prompt,
         image=ref_img,
         num_inference_steps=steps,
-        guidance_scale=3.5,
+        guidance_scale=5.0,
         height=512,
         width=512,
         generator=generator,
