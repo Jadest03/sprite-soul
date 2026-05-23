@@ -39,6 +39,7 @@ var _screen_timer: Timer
 var _screen_analyzing := false
 var _last_proactive := ""
 var _last_screen_context := ""
+var _screen_perm_ok := false
 
 func _ready() -> void:
 	layer = 10
@@ -64,6 +65,7 @@ func _process(delta: float) -> void:
 			if _displayed_chars >= _full_text.length():
 				_is_typing = false
 				_hide_timer = BUBBLE_HIDE_DELAY
+				EventBus.chat_bubble_closed.emit()
 			else:
 				_typing_timer = TYPING_INTERVAL
 
@@ -75,13 +77,13 @@ func _process(delta: float) -> void:
 
 func _update_input_position() -> void:
 	var vh := get_viewport().get_visible_rect().size.y
-	_input_row.position = Vector2(4.0, vh - _input_row.size.y - 4.0)
+	_input_row.position = Vector2(4.0, vh - _input_row.size.y)
 
 func _update_bubble_position() -> void:
 	var pos := companion.position
 	var bsize := _bubble.size
 	var x := clampf(pos.x - bsize.x * 0.5, 4.0, 296.0 - bsize.x)
-	var y := maxf(4.0, pos.y - 120.0 - bsize.y)
+	var y := maxf(4.0, pos.y - companion.SPRITE_HALF.y * 1.2 - 8.0 - bsize.y)
 	_bubble.position = Vector2(x, y)
 
 func _on_companion_clicked() -> void:
@@ -197,13 +199,30 @@ func _setup_screen_awareness() -> void:
 	_screen_http = HTTPRequest.new()
 	add_child(_screen_http)
 	_screen_http.request_completed.connect(_on_screen_analyzed)
+	# Defer permission check so the companion renders first
+	get_tree().create_timer(1.0).timeout.connect(_start_screen_capture)
 
+func _start_screen_capture() -> void:
+	_screen_perm_ok = _check_screen_perm()
+	if not _screen_perm_ok:
+		get_tree().create_timer(2.0).timeout.connect(func():
+			EventBus.chat_response_received.emit(
+				"화면 기록 권한이 없어요! 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록에서 SpriteSoul을 허용 후 재시작해주세요."))
+		return
 	_screen_timer = Timer.new()
 	_screen_timer.wait_time = SCREEN_INTERVAL
 	_screen_timer.one_shot = false
 	_screen_timer.timeout.connect(_capture_and_analyze)
 	add_child(_screen_timer)
 	_screen_timer.start()
+
+# Returns false only if Python3 ran and explicitly reported no permission.
+# Falls back to true (assume OK) if Python3 unavailable.
+func _check_screen_perm() -> bool:
+	var code := OS.execute("/usr/bin/python3", ["-c",
+		"import ctypes,sys; lib=ctypes.cdll.LoadLibrary('/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics'); lib.CGPreflightScreenCaptureAccess.restype=ctypes.c_bool; sys.exit(0 if lib.CGPreflightScreenCaptureAccess() else 1)"],
+		[])
+	return code != 1
 
 func _capture_and_analyze() -> void:
 	var is_sleeping: bool = companion != null and companion.fsm.current_state == CompanionFSM.State.SLEEP

@@ -44,63 +44,44 @@ def detect_device():
 
 def build_prompt() -> str:
     return (
-        "Pixel art RPG game character sprite sheet, 4x4 grid, white background between cells. "
-        "Row 1 (facing south, front view): "
-            "frame 1: neutral idle stance, arms relaxed at sides; "
-            "frame 2: walk cycle step left, arms relaxed; "
-            "frame 3: walk cycle step right, arms relaxed; "
-            "frame 4: victory pose, both arms raised up. "
-        "Row 2 (facing west, left view): "
-            "frame 1: neutral idle; frame 2-3: walk cycle; frame 4: jump. "
-        "Row 3 (facing east, right view): "
-            "frame 1: neutral idle; frame 2-3: walk cycle; frame 4: jump. "
-        "Row 4 (facing north, back view): "
-            "frame 1-3: walk cycle; frame 4: sleeping, lying face down. "
-        "Clean pixel art, consistent proportions, clear silhouette, same character across all frames."
+        "A pixel art spritesheet of a character. "
+        "The spritesheet is a 4 by 4 grid of four rows of frames - "
+        "first row is 3 walking frames facing down and 1 frame both arms raised, "
+        "second row is 3 walking frames facing left and 1 frame jumping left, "
+        "third row is 3 walking frames facing right and 1 frame jumping right, "
+        "fourth row is 3 walking frames back view facing up and 1 frame lying on floor."
     )
 
 
-def detect_grid_valleys(img, n_rows=4, n_cols=4, pad=5):
-    arr = np.array(img.convert("RGB"))
-    content = ~((arr[:, :, 0] > 230) & (arr[:, :, 1] > 230) & (arr[:, :, 2] > 230))
-    col_den = content.sum(axis=0).astype(float)
-    row_den = content.sum(axis=1).astype(float)
-
-    def find_bounds(density, n):
-        nz = np.where(density > 2)[0]
-        start, end = int(nz[0]), int(nz[-1])
-        section_w = (end - start) // n
-        bounds = [max(0, start - pad)]
-        for i in range(1, n):
-            center = start + i * section_w
-            lo = max(start, center - section_w // 3)
-            hi = min(end, center + section_w // 3)
-            bounds.append(lo + int(np.argmin(density[lo:hi])))
-        bounds.append(min(len(density), end + pad))
-        return bounds
-
-    return find_bounds(col_den, n_cols), find_bounds(row_den, n_rows)
+def k_centroid_downscale(img, factor=4):
+    """각 NxN 블록에서 평균색에 가장 가까운 실제 픽셀 선택 (pixel art 특화 다운스케일)."""
+    arr = np.array(img.convert("RGB")).astype(float)
+    h, w = arr.shape[:2]
+    nh, nw = h // factor, w // factor
+    blocks = arr[:nh*factor, :nw*factor].reshape(nh, factor, nw, factor, 3)
+    means = blocks.mean(axis=(1, 3))
+    flat = blocks.transpose(0, 2, 1, 3, 4).reshape(nh, nw, factor * factor, 3)
+    dists = ((flat - means[:, :, np.newaxis, :]) ** 2).sum(axis=3)
+    idx = dists.argmin(axis=2)
+    out = flat[np.arange(nh)[:, None], np.arange(nw)[None, :], idx]
+    return Image.fromarray(out.astype(np.uint8), "RGB")
 
 
-def tight_crop(img):
-    arr = np.array(img.convert("RGB"))
-    content = ~((arr[:, :, 0] > 230) & (arr[:, :, 1] > 230) & (arr[:, :, 2] > 230))
-    rows = np.any(content, axis=1)
-    cols = np.any(content, axis=0)
-    if not rows.any():
-        return img
-    y0, y1 = int(np.where(rows)[0][0]), int(np.where(rows)[0][-1])
-    x0, x1 = int(np.where(cols)[0][0]), int(np.where(cols)[0][-1])
-    return img.crop((x0, y0, x1 + 1, y1 + 1))
+def _is_bg(arr_rgb):
+    r = arr_rgb[:,:,0].astype(int)
+    g = arr_rgb[:,:,1].astype(int)
+    b = arr_rgb[:,:,2].astype(int)
+    return ((r > 240) & (g > 240) & (b > 240) &
+            (np.abs(r-g) < 15) & (np.abs(g-b) < 15))
 
 
 def remove_white_bg(img):
-    """테두리에서 BFS로 흰 배경(>235)만 투명 처리."""
+    """테두리에서 BFS로 흰색/회색 배경을 투명 처리."""
+    from collections import deque
     rgba = img.convert("RGBA")
     arr = np.array(rgba).copy()
     h, w = arr.shape[:2]
-    # BFS로 테두리 연결된 흰색(>220) 픽셀 제거
-    bg = (arr[:, :, 0] > 220) & (arr[:, :, 1] > 220) & (arr[:, :, 2] > 220)
+    bg = _is_bg(arr[:,:,:3])
     visited = np.zeros((h, w), dtype=bool)
     queue = deque()
     for x in range(w):
@@ -115,7 +96,7 @@ def remove_white_bg(img):
             continue
         visited[y, x] = True
         for dy, dx in ((-1,0),(1,0),(0,-1),(0,1)):
-            ny, nx = y + dy, x + dx
+            ny, nx = y+dy, x+dx
             if 0 <= ny < h and 0 <= nx < w and not visited[ny, nx] and bg[ny, nx]:
                 queue.append((ny, nx))
     arr[visited, 3] = 0
@@ -123,377 +104,241 @@ def remove_white_bg(img):
 
 
 def _detect_col_count(img):
-    """가로 밀도 클러스터로 2열 vs 4열 판별."""
+    """가로 밀도 피크 수로 2열 vs 4열 판별."""
+    from scipy.signal import find_peaks
     arr = np.array(img.convert("RGB"))
-    content = ~((arr[:, :, 0] > 230) & (arr[:, :, 1] > 230) & (arr[:, :, 2] > 230))
+    content = ~((arr[:,:,0]>230)&(arr[:,:,1]>230)&(arr[:,:,2]>230))
     col_den = content.sum(axis=0).astype(float)
-    kernel = 8
-    smoothed = np.convolve(col_den, np.ones(kernel) / kernel, mode="same")
-    if smoothed.max() == 0:
+    smoothed = np.convolve(col_den, np.ones(16)/16, mode="same")
+    max_v = smoothed.max()
+    if max_v == 0:
         return 4
-    threshold = smoothed.max() * 0.08
-    in_cluster = smoothed[0] > threshold
-    clusters = 1 if in_cluster else 0
-    for v in smoothed[1:]:
-        if v > threshold and not in_cluster:
-            clusters += 1
-            in_cluster = True
-        elif v <= threshold:
-            in_cluster = False
-    return 2 if clusters <= 2 else 4
+    w = len(smoothed)
+    peaks, _ = find_peaks(smoothed, height=max_v * 0.3, distance=w // 6)
+    return 4 if len(peaks) >= 3 else 2
 
 
-def _split_frames_4x2(result, out_dir, frame_size, margin, row_bounds):
-    """4×2 layout: 4행 × 2열 = 8프레임."""
-    FRAME_NAMES_4x2 = [
-        ["walk_down_1", "arms_raised"],
-        ["walk_left_1", "jump_left"],
-        ["walk_right_1", "jump_right"],
-        ["walk_back_1", "lying_down"],
-    ]
+def _filter_largest_component(rgba_img):
+    """가장 큰 연결 컴포넌트만 남기고 아티팩트 제거."""
+    arr = np.array(rgba_img)
+    alpha = arr[:,:,3] > 10
+    if not alpha.any():
+        return rgba_img
+    labeled, n = ndi.label(alpha)
+    if n <= 1:
+        return rgba_img
+    sizes = ndi.sum(alpha, labeled, range(1, n+1))
+    main = int(np.argmax(sizes)) + 1
+    out = arr.copy()
+    out[labeled != main, 3] = 0
+    return Image.fromarray(out, "RGBA")
 
-    def _row_col_bounds_2(row_y1, row_y2, pad=5):
-        strip = result.crop((0, row_y1, result.width, row_y2))
-        arr2 = np.array(strip.convert("RGB"))
-        den = (~((arr2[:, :, 0] > 230) & (arr2[:, :, 1] > 230) & (arr2[:, :, 2] > 230))).sum(axis=0).astype(float)
-        nz = np.where(den > 2)[0]
-        if len(nz) == 0:
-            mid = result.width // 2
-            return [0, mid, result.width]
-        start, end = int(nz[0]), int(nz[-1])
-        qr = (end - start) // 4
-        c = (start + end) // 2
-        lo, hi = max(start, c - qr), min(end, c + qr)
-        valley = lo + int(np.argmin(den[lo:hi]))
-        return [max(0, start - pad), valley, min(result.width, end + pad)]
 
-    def _process(crop_img, is_lying=False):
-        arr2 = np.array(crop_img.convert("RGB"))
-        cont = ~((arr2[:, :, 0] > 230) & (arr2[:, :, 1] > 230) & (arr2[:, :, 2] > 230))
-        row_a, col_a = np.any(cont, axis=1), np.any(cont, axis=0)
-        if not row_a.any():
-            return Image.new("RGBA", (frame_size, frame_size), (0, 0, 0, 0))
-        ry0, ry1 = int(np.where(row_a)[0][0]), int(np.where(row_a)[0][-1])
-        cx0, cx1 = int(np.where(col_a)[0][0]), int(np.where(col_a)[0][-1])
-        tc = crop_img.crop((cx0, ry0, cx1 + 1, ry1 + 1))
-        rgba = remove_white_bg(tc)
-        alpha = np.array(rgba)[:, :, 3] > 10
-        labeled, n = ndi.label(alpha)
-        if n > 1:
-            sizes = ndi.sum(alpha, labeled, range(1, n + 1))
-            main = int(np.argmax(sizes)) + 1
-            arr3 = np.array(rgba).copy()
-            arr3[labeled != main, 3] = 0
-            rgba = Image.fromarray(arr3, "RGBA")
-        w, h = rgba.size
-        target_h = int(frame_size * 0.82)
-        if not is_lying and h > 10:
-            scale = min(target_h / h, (frame_size - margin) / max(w, 1))
-        else:
-            scale = (frame_size - margin * 2) / max(w, 1)
-        new_w, new_h = max(1, int(w * scale)), max(1, int(h * scale))
-        scaled = rgba.resize((new_w, new_h), NEAREST)
-        canvas = Image.new("RGBA", (frame_size, frame_size), (0, 0, 0, 0))
-        px = (frame_size - new_w) // 2
-        py = max(0, frame_size - new_h - margin)
-        canvas.paste(scaled, (px, py), mask=scaled)
-        return canvas
+def _split_2x2(result, out_dir, frame_size=128, margin=8):
+    """2×2 layout: 4 large poses (front / arms / back / lying)."""
+    w, h = result.size
+    hw, hh = w // 2, h // 2
+
+    raw = {
+        "front": result.crop((0,  0,  hw, hh)),
+        "arms":  result.crop((hw, 0,  w,  hh)),
+        "back":  result.crop((0,  hh, hw, h)),
+        "lying": result.crop((hw, hh, w,  h)),
+    }
 
     frames = {}
-    for row_idx, row_names in enumerate(FRAME_NAMES_4x2):
-        y1 = row_bounds[row_idx]
-        y2 = result.height if row_idx == 3 else row_bounds[row_idx + 1]
-        cb = _row_col_bounds_2(y1, y2)
-        for col_idx, name in enumerate(row_names):
-            x1 = cb[col_idx]
-            x2 = result.width if col_idx == 1 else cb[col_idx + 1]
-            cell = result.crop((x1, y1, x2, y2))
-            frame = _process(cell, is_lying=(name == "lying_down"))
-            frames[name] = frame
-            frame.save(os.path.join(out_dir, f"frame_{name}.png"))
+    for name, cell in raw.items():
+        rgba = _filter_largest_component(remove_white_bg(cell))
+        arr = np.array(rgba)
+        a = arr[:,:,3] > 10
+        if not a.any():
+            frames[name] = Image.new("RGBA", (frame_size, frame_size), (0,0,0,0))
+            continue
+        ys, xs = np.where(a)
+        crop = rgba.crop((int(xs.min()), int(ys.min()), int(xs.max())+1, int(ys.max())+1))
+        cw, ch = crop.size
+        if name == "lying":
+            scale = (frame_size - margin*2) / max(cw, 1)
+            nw, nh = frame_size - margin*2, max(1, int(ch*scale))
+        else:
+            target_h = int(frame_size * 0.82)
+            scale = min(target_h / max(ch, 1), (frame_size-margin*2) / max(cw, 1))
+            nw, nh = max(1, int(cw*scale)), max(1, int(ch*scale))
+        scaled = crop.resize((nw, nh), NEAREST)
+        canvas = Image.new("RGBA", (frame_size, frame_size), (0,0,0,0))
+        canvas.paste(scaled, ((frame_size-nw)//2, max(0, frame_size-nh-margin)), mask=scaled)
+        frames[name] = canvas
+        canvas.save(os.path.join(out_dir, f"frame_{name}.png"))
 
     ANIM_MAP = {
-        "idle_1":  "walk_down_1",
-        "walk_1":  "walk_left_1",
-        "walk_2":  "jump_left",
-        "walk_3":  "walk_left_1",
-        "sleep_1": "lying_down",
-        "react_1": "arms_raised",
-        "react_2": "walk_down_1",
+        "idle_1":   ("front", False),
+        "idle_2":   ("front", False),
+        "idle_3":   ("front", False),
+        "walk_l_1": ("front", False),
+        "walk_l_2": ("front", False),
+        "walk_l_3": ("front", False),
+        "walk_r_1": ("front", True),
+        "walk_r_2": ("front", True),
+        "walk_r_3": ("front", True),
+        "sleep_1":  ("lying", False),
+        "react_1":  ("arms",  False),
+        "react_2":  ("front", False),
     }
-    WALK_ANIM = {"walk_1", "walk_2", "walk_3"}
-    for anim_name, src in ANIM_MAP.items():
+    for anim_name, (src, flip) in ANIM_MAP.items():
         frame = frames[src].copy()
-        if anim_name in WALK_ANIM:
+        if flip:
+            frame = frame.transpose(Image.FLIP_LEFT_RIGHT)
+        frame.save(os.path.join(out_dir, f"{anim_name}.png"))
+    return frames
+
+
+def split_frames(result, out_dir, frame_size=128, margin=8):
+    """스프라이트시트를 프레임으로 분할.
+
+    핵심 설계:
+    - 고정 그리드 분할 (밸리 감지 없음 → 생성마다 일관)
+    - 행 단위 공통 bounding box → 순간이동 방지
+    - idle 행 기준 단일 스케일 → 크기 일관
+    - walk_left 행 직접 + mirror → 방향 보장
+    """
+    w, h = result.size
+    col_count = _detect_col_count(result)
+
+    # 2×2 감지: 이미지를 4등분했을 때 실질 행이 2개 이하면 large-pose 레이아웃
+    arr = np.array(result.convert("RGB"))
+    content_rows = ~((arr[:,:,0]>230)&(arr[:,:,1]>230)&(arr[:,:,2]>230))
+    h4 = h // 4
+    row_has = [bool(content_rows[i*h4:(i+1)*h4].any()) for i in range(4)]
+    if sum(row_has) < 3:
+        return _split_2x2(result, out_dir, frame_size, margin)
+
+    if col_count == 4:
+        FRAME_NAMES = [
+            ["walk_down_1", "walk_down_2", "walk_down_3", "arms_raised"],
+            ["walk_left_1", "walk_left_2", "walk_left_3", "jump_left"],
+            ["walk_right_1","walk_right_2","walk_right_3","jump_right"],
+            ["walk_back_1", "walk_back_2", "walk_back_3", "lying_down"],
+        ]
+    else:  # 4×2
+        FRAME_NAMES = [
+            ["walk_down_1", "arms_raised"],
+            ["walk_left_1", "jump_left"],
+            ["walk_right_1","jump_right"],
+            ["walk_back_1", "lying_down"],
+        ]
+
+    cell_w = w // col_count
+    cell_h = h // 4
+
+    # 1패스: 고정 그리드 분할 + 배경 제거
+    cells = {}
+    for ri, row_names in enumerate(FRAME_NAMES):
+        for ci, name in enumerate(row_names):
+            cell = result.crop((ci*cell_w, ri*cell_h, (ci+1)*cell_w, (ri+1)*cell_h))
+            cells[name] = _filter_largest_component(remove_white_bg(cell))
+
+    # 2패스: 행 단위 공통 character bbox (순간이동 방지)
+    def char_bbox(img):
+        a = np.array(img)[:,:,3] > 10
+        if not a.any():
+            return None
+        ys, xs = np.where(a)
+        return int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
+
+    row_bbox = {}
+    for ri, row_names in enumerate(FRAME_NAMES):
+        bbs = [b for b in (char_bbox(cells[n]) for n in row_names) if b is not None]
+        if not bbs:
+            row_bbox[ri] = (0, 0, cell_w-1, cell_h-1)
+        else:
+            row_bbox[ri] = (
+                min(b[0] for b in bbs), min(b[1] for b in bbs),
+                max(b[2] for b in bbs), max(b[3] for b in bbs),
+            )
+
+    # 3패스: idle 행(row 0) 기준 전역 스케일 계산
+    ib = row_bbox[0]
+    idle_char_h = ib[3] - ib[1]
+    target_h = int(frame_size * 0.82)
+    global_scale = target_h / max(idle_char_h, 1)
+
+    LYING = {"lying_down"}
+
+    # 4패스: 행 공통 bbox로 크롭 → 스케일 → 캔버스 배치
+    frames = {}
+    for ri, row_names in enumerate(FRAME_NAMES):
+        bx0, by0, bx1, by1 = row_bbox[ri]
+        pad = 2
+        cx0 = max(0, bx0-pad);     cy0 = max(0, by0-pad)
+        cx1 = min(cell_w, bx1+pad+1); cy1 = min(cell_h, by1+pad+1)
+
+        for name in row_names:
+            crop = cells[name].crop((cx0, cy0, cx1, cy1))
+            cw, ch = crop.size
+            if cw < 1 or ch < 1:
+                frames[name] = Image.new("RGBA", (frame_size, frame_size), (0,0,0,0))
+                continue
+
+            if name in LYING:
+                scale = (frame_size - margin*2) / max(cw, 1)
+                nw, nh = frame_size - margin*2, max(1, int(ch*scale))
+            else:
+                scale = min(global_scale, (frame_size-margin*2) / max(cw, 1))
+                nw, nh = max(1, int(cw*scale)), max(1, int(ch*scale))
+
+            scaled = crop.resize((nw, nh), NEAREST)
+            canvas = Image.new("RGBA", (frame_size, frame_size), (0,0,0,0))
+            canvas.paste(scaled, ((frame_size-nw)//2, max(0, frame_size-nh-margin)), mask=scaled)
+            frames[name] = canvas
+            canvas.save(os.path.join(out_dir, f"frame_{name}.png"))
+
+    # 5패스: ANIM_MAP — walk_left/walk_right 행을 각 방향에 직접 사용
+    def has_content(name):
+        f = frames.get(name)
+        return f is not None and np.array(f)[:,:,3].max() > 10
+
+    if col_count == 4:
+        wl2 = "walk_left_2" if has_content("walk_left_2") else "walk_left_1"
+        wl3 = "walk_left_3" if has_content("walk_left_3") else "walk_left_1"
+        wr2 = "walk_right_2" if has_content("walk_right_2") else "walk_right_1"
+        wr3 = "walk_right_3" if has_content("walk_right_3") else "walk_right_1"
+        ANIM_MAP = {
+            "idle_1":   ("walk_down_1",  False),
+            "idle_2":   ("walk_down_2",  False),
+            "idle_3":   ("walk_down_3",  False),
+            "walk_l_1": ("walk_left_1",  False),
+            "walk_l_2": (wl2,            False),
+            "walk_l_3": (wl3,            False),
+            "walk_r_1": ("walk_right_1", False),
+            "walk_r_2": (wr2,            False),
+            "walk_r_3": (wr3,            False),
+            "sleep_1":  ("lying_down",   False),
+            "react_1":  ("arms_raised",  False),
+            "react_2":  ("jump_left",    True),
+        }
+    else:  # 4×2: walk 프레임 1개
+        ANIM_MAP = {
+            "idle_1":   ("walk_down_1", False),
+            "idle_2":   ("walk_down_1", False),
+            "idle_3":   ("walk_down_1", False),
+            "walk_l_1": ("walk_left_1", False),
+            "walk_l_2": ("walk_left_1", False),
+            "walk_l_3": ("walk_left_1", False),
+            "walk_r_1": ("walk_left_1", True),
+            "walk_r_2": ("walk_left_1", True),
+            "walk_r_3": ("walk_left_1", True),
+            "sleep_1":  ("lying_down",  False),
+            "react_1":  ("arms_raised", False),
+            "react_2":  ("walk_down_1", False),
+        }
+
+    for anim_name, (src, flip) in ANIM_MAP.items():
+        frame = frames[src].copy()
+        if flip:
             frame = frame.transpose(Image.FLIP_LEFT_RIGHT)
         frame.save(os.path.join(out_dir, f"{anim_name}.png"))
 
     return frames
-
-
-def _split_frames_2x2(result, out_dir, frame_size=128, margin=8):
-    """2×2 layout (4 large poses): front, arms-raised, back, lying-down."""
-    arr = np.array(result.convert("RGB"))
-    content = ~((arr[:, :, 0] > 230) & (arr[:, :, 1] > 230) & (arr[:, :, 2] > 230))
-    col_den = content.sum(axis=0).astype(float)
-    row_den = content.sum(axis=1).astype(float)
-
-    nz_x = np.where(col_den > 2)[0]
-    nz_y = np.where(row_den > 2)[0]
-    x0, x1 = int(nz_x[0]), int(nz_x[-1])
-    y0, y1 = int(nz_y[0]), int(nz_y[-1])
-
-    # Find deepest valley in the middle 50% of each axis
-    xm, xr = (x0 + x1) // 2, (x1 - x0) // 4
-    x_valley = xm - xr + int(np.argmin(col_den[xm - xr: xm + xr]))
-    ym, yr = (y0 + y1) // 2, (y1 - y0) // 4
-    y_valley = ym - yr + int(np.argmin(row_den[ym - yr: ym + yr]))
-
-    raw_crops = {
-        "front": result.crop((x0,       y0,       x_valley, y_valley)),
-        "arms":  result.crop((x_valley, y0,       x1,       y_valley)),
-        "back":  result.crop((x0,       y_valley, x_valley, y1)),
-        "lying": result.crop((x_valley, y_valley, x1,       y1)),
-    }
-
-    def _process(crop_img, is_lying=False):
-        arr2 = np.array(crop_img.convert("RGB"))
-        cont = ~((arr2[:, :, 0] > 230) & (arr2[:, :, 1] > 230) & (arr2[:, :, 2] > 230))
-        row_a, col_a = np.any(cont, axis=1), np.any(cont, axis=0)
-        if not row_a.any():
-            return Image.new("RGBA", (frame_size, frame_size), (0, 0, 0, 0))
-        ry0, ry1 = int(np.where(row_a)[0][0]), int(np.where(row_a)[0][-1])
-        cx0, cx1 = int(np.where(col_a)[0][0]), int(np.where(col_a)[0][-1])
-        tc = crop_img.crop((cx0, ry0, cx1 + 1, ry1 + 1))
-
-        rgba = remove_white_bg(tc)
-        alpha = np.array(rgba)[:, :, 3] > 10
-        labeled, n = ndi.label(alpha)
-        if n > 1:
-            sizes = ndi.sum(alpha, labeled, range(1, n + 1))
-            main = int(np.argmax(sizes)) + 1
-            arr3 = np.array(rgba).copy()
-            arr3[labeled != main, 3] = 0
-            rgba = Image.fromarray(arr3, "RGBA")
-
-        w, h = rgba.size
-        target_h = int(frame_size * 0.82)
-        if not is_lying and h > 10:
-            scale = min(target_h / h, (frame_size - margin) / max(w, 1))
-        else:
-            scale = (frame_size - margin * 2) / max(w, 1)
-        new_w = max(1, int(w * scale))
-        new_h = max(1, int(h * scale))
-        scaled = rgba.resize((new_w, new_h), NEAREST)
-        canvas = Image.new("RGBA", (frame_size, frame_size), (0, 0, 0, 0))
-        px = (frame_size - new_w) // 2
-        py = max(0, frame_size - new_h - margin)
-        canvas.paste(scaled, (px, py), mask=scaled)
-        return canvas
-
-    processed = {
-        "front": _process(raw_crops["front"]),
-        "arms":  _process(raw_crops["arms"]),
-        "back":  _process(raw_crops["back"]),
-        "lying": _process(raw_crops["lying"], is_lying=True),
-    }
-
-    for name, img in processed.items():
-        img.save(os.path.join(out_dir, f"frame_{name}.png"))
-
-    ANIM_MAP = {
-        "idle_1":  "front",
-        "walk_1":  "front",
-        "walk_2":  "front",
-        "walk_3":  "front",
-        "sleep_1": "lying",
-        "react_1": "arms",
-        "react_2": "front",
-    }
-    WALK_ANIM = {"walk_1", "walk_2", "walk_3"}
-    for anim_name, src in ANIM_MAP.items():
-        frame = processed[src].copy()
-        if anim_name in WALK_ANIM:
-            frame = frame.transpose(Image.FLIP_LEFT_RIGHT)
-        frame.save(os.path.join(out_dir, f"{anim_name}.png"))
-
-    return processed
-
-
-def split_frames(result, out_dir, frame_size=128, margin=8):
-    FRAME_NAMES = [
-        ["walk_down_1", "walk_down_2", "walk_down_3", "arms_raised"],
-        ["walk_left_1", "walk_left_2", "walk_left_3", "jump_left"],
-        ["walk_right_1", "walk_right_2", "walk_right_3", "jump_right"],
-        ["walk_back_1", "walk_back_2", "walk_back_3", "lying_down"],
-    ]
-    col_bounds, row_bounds = detect_grid_valleys(result)
-
-    # 2×2 layout detection: if any detected row section is too thin, the LoRA
-    # generated 4 large poses (front/arms/back/lying) instead of 16 walk-cycle frames.
-    row_heights = [row_bounds[i + 1] - row_bounds[i] for i in range(len(row_bounds) - 1)]
-    if min(row_heights) < 60:
-        return _split_frames_2x2(result, out_dir, frame_size, margin)
-
-    col_count = _detect_col_count(result)
-    if col_count == 2:
-        return _split_frames_4x2(result, out_dir, frame_size, margin, row_bounds)
-
-    def _row_col_bounds(row_y1, row_y2, n=4, pad=5):
-        """특정 행의 밀도로 컬럼 경계를 독립 검출."""
-        strip = result.crop((0, row_y1, result.width, row_y2))
-        arr = np.array(strip.convert("RGB"))
-        den = (~((arr[:,:,0]>230)&(arr[:,:,1]>230)&(arr[:,:,2]>230))).sum(axis=0).astype(float)
-        nz = np.where(den > 2)[0]
-        if len(nz) == 0:
-            return col_bounds
-        start, end = int(nz[0]), int(nz[-1])
-        sw = (end - start) // n
-        bounds = [max(0, start - pad)]
-        for i in range(1, n):
-            c = start + i * sw
-            lo, hi = max(start, c - sw // 3), min(end, c + sw // 3)
-            bounds.append(lo + int(np.argmin(den[lo:hi])))
-        bounds.append(min(result.width, end + pad))
-        return bounds
-
-    # walk_left/walk_down 행은 각 행의 밀도로 컬럼 경계 독립 검출
-    walk_down_col_bounds = _row_col_bounds(row_bounds[0], row_bounds[1])
-    walk_left_col_bounds = _row_col_bounds(row_bounds[1], row_bounds[2])
-
-    def _smart_crop(img, density_threshold=0.04):
-        """가로는 density 필터(아티팩트 제거), 세로는 tight 기준(발끝 보존)."""
-        arr = np.array(img.convert("RGB"))
-        content = ~((arr[:, :, 0] > 230) & (arr[:, :, 1] > 230) & (arr[:, :, 2] > 230))
-        col_den = content.sum(axis=0) / max(content.shape[0], 1)
-        col_mask = col_den > density_threshold
-        row_any = content.any(axis=1)
-        if not col_mask.any() or not row_any.any():
-            return tight_crop(img)
-        x0, x1 = int(np.where(col_mask)[0][0]), int(np.where(col_mask)[0][-1])
-        y0, y1 = int(np.where(row_any)[0][0]), int(np.where(row_any)[0][-1])
-        return img.crop((x0, y0, x1 + 1, y1 + 1))
-
-    def _filter_largest_component(rgba_img):
-        """rembg alpha 기반으로 가장 큰 연결 컴포넌트만 남기고 아티팩트 제거."""
-        arr = np.array(rgba_img)
-        alpha = arr[:, :, 3] > 10
-        if not alpha.any():
-            return rgba_img
-        labeled, n = ndi.label(alpha)
-        if n <= 1:
-            return rgba_img
-        sizes = ndi.sum(alpha, labeled, range(1, n + 1))
-        main_label = int(np.argmax(sizes)) + 1
-        mask = labeled == main_label
-        result = arr.copy()
-        result[~mask, 3] = 0
-        return Image.fromarray(result, "RGBA")
-
-    # 1패스: 모든 행 독립 컬럼 경계 + connected component 아티팩트 제거
-    walk_right_col_bounds = _row_col_bounds(row_bounds[2], row_bounds[3])
-    walk_back_col_bounds  = _row_col_bounds(row_bounds[3], result.height)
-    ROW_COL_BOUNDS = {
-        0: walk_down_col_bounds,
-        1: walk_left_col_bounds,
-        2: walk_right_col_bounds,
-        3: walk_back_col_bounds,
-    }
-    tight_frames = {}
-    for row_idx, row_names in enumerate(FRAME_NAMES):
-        cb = ROW_COL_BOUNDS[row_idx]
-        for col_idx, name in enumerate(row_names):
-            x1 = cb[col_idx]
-            y1 = row_bounds[row_idx]
-            x2 = result.width  if col_idx == 3 else cb[col_idx + 1]
-            y2 = result.height if row_idx == 3 else row_bounds[row_idx + 1]
-            cell = result.crop((x1, y1, x2, y2))
-            tight_frames[name] = _smart_crop(cell)
-
-    # 1.5패스: 스케일링 전 원본 기준으로 유효성 계산
-    # tight_crop은 RGB라 RGBA 변환 시 alpha=255 → remove_white_bg로 실제 불투명 픽셀 계산
-    def _is_empty_tight(tc, min_opaque=500) -> bool:
-        arr = np.array(remove_white_bg(tc))
-        return int((arr[:, :, 3] > 10).sum()) < min_opaque
-
-    empty_flags = {name: _is_empty_tight(tc) for name, tc in tight_frames.items()}
-    # walk_left가 walk_right보다 안정적으로 생성됨 → walk 기준 행으로 사용
-    # Companion.gd에서 flip_h로 방향 전환하므로 left 프레임으로도 동작
-    walk2_valid = not empty_flags["walk_left_2"]
-    walk3_valid = not empty_flags["walk_left_3"]
-
-    # 2패스: 캐릭터 높이 기준 정규화 → frame_size 정사각 캔버스 (투명 배경)
-    # 모든 서있는 프레임을 동일 높이로 스케일해 애니메이션 크기 일관성 확보
-    LYING_FRAMES = {"lying_down"}
-    target_char_h = int(frame_size * 0.82)
-
-    raw_frames = {}
-    for name, tc in tight_frames.items():
-        tc_rgba = _filter_largest_component(remove_white_bg(tc))
-        w, h = tc_rgba.size
-
-        if name not in LYING_FRAMES and h > 10:
-            # 높이 우선으로 스케일, 너비가 프레임을 초과하면 너비 기준으로 재조정
-            scale = min(target_char_h / h, (frame_size - margin) / max(w, 1))
-            new_w = max(1, int(w * scale))
-            new_h = max(1, int(h * scale))
-        else:
-            scale = (frame_size - margin * 2) / max(w, 1)
-            new_w = frame_size - margin * 2
-            new_h = max(1, int(h * scale))
-
-        tc_scaled = tc_rgba.resize((new_w, new_h), NEAREST)
-        canvas = Image.new("RGBA", (frame_size, frame_size), (0, 0, 0, 0))
-        paste_x = (frame_size - new_w) // 2
-        paste_y = frame_size - new_h - margin  # 바닥 정렬로 발 위치 일관성
-        canvas.paste(tc_scaled, (paste_x, max(0, paste_y)), mask=tc_scaled)
-        raw_frames[name] = canvas
-        canvas.save(os.path.join(out_dir, f"frame_{name}.png"))
-
-    # 3패스: 빈 프레임 폴백 (empty_flags 재사용)
-    for row_names in FRAME_NAMES:
-        fallback = next((raw_frames[n] for n in row_names if not empty_flags[n]), None)
-        if fallback is None:
-            continue
-        for name in row_names:
-            if empty_flags[name]:
-                raw_frames[name] = fallback.copy()
-                fallback.copy().save(os.path.join(out_dir, f"frame_{name}.png"))
-
-    # 4패스: 유효 프레임에 따라 ANIM_MAP 동적 결정
-
-    if walk2_valid and walk3_valid:
-        walk_2_src, walk_3_src = "walk_left_2", "walk_left_3"
-    elif walk2_valid:
-        walk_2_src, walk_3_src = "walk_left_2", "jump_left"
-    else:
-        walk_2_src, walk_3_src = "jump_left", "walk_left_1"
-
-    def _pixel_count(name: str) -> int:
-        arr = np.array(raw_frames[name])
-        return int((arr[:, :, 3] > 10).sum())
-
-    idle_src = max(["walk_down_1", "walk_down_2", "walk_down_3"], key=_pixel_count)
-
-    ANIM_MAP = {
-        "idle_1":  idle_src,
-        "walk_1":  "walk_left_1",
-        "walk_2":  walk_2_src,
-        "walk_3":  walk_3_src,
-        "sleep_1": "lying_down",
-        "react_1": "arms_raised",
-        "react_2": idle_src,
-    }
-
-    # walk 프레임은 walk_left 기반이라 오른쪽을 향하도록 미러링
-    WALK_ANIM = {"walk_1", "walk_2", "walk_3"}
-    for anim_name, src in ANIM_MAP.items():
-        frame = raw_frames[src].copy()
-        if anim_name in WALK_ANIM:
-            frame = frame.transpose(Image.FLIP_LEFT_RIGHT)
-        frame.save(os.path.join(out_dir, f"{anim_name}.png"))
-
-    return raw_frames
 
 
 def _patch_tqdm_for_download():
@@ -504,7 +349,7 @@ def _patch_tqdm_for_download():
     class _DownloadTqdm(_orig):
         def update(self, n=1):
             super().update(n)
-            if self.total and self.total > 1_000_000 and self.n is not None:
+            if self.total and self.n is not None:
                 pct = int(100 * min(self.n, self.total) / self.total)
                 dl  = self.n / 1_048_576
                 tot = self.total / 1_048_576
@@ -515,6 +360,25 @@ def _patch_tqdm_for_download():
                 log(f"DOWNLOAD:{pct}:{size_str}")
 
     _ta.tqdm = _DownloadTqdm
+
+
+def _disk_download_progress_thread(stop_event, model_id, expected_gb=13.0):
+    """tqdm이 안 잡힐 때 캐시 폴더 크기로 직접 진행률 계산."""
+    cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "huggingface", "hub")
+    model_dir = os.path.join(cache_dir, "models--" + model_id.replace("/", "--"))
+    expected = expected_gb * 1024 ** 3
+    while not stop_event.is_set():
+        time.sleep(3)
+        if not os.path.exists(model_dir):
+            continue
+        total = sum(
+            os.path.getsize(os.path.join(dp, f))
+            for dp, _, files in os.walk(model_dir)
+            for f in files
+        )
+        pct = min(99, int(100 * total / expected))
+        dl = total / 1024 ** 3
+        log(f"DOWNLOAD:{pct}:{dl:.1f}GB / {expected_gb:.0f}GB")
 
 
 def _load_progress_thread(stop_event, estimated_secs=90):
@@ -542,12 +406,12 @@ def generate(args):
     device, dtype = detect_device()
     log(f"디바이스: {device.upper()}")
 
-    steps = args.steps if args.steps else (35 if device != "cpu" else 20)
+    steps = args.steps if args.steps else (15 if device != "cpu" else 8)
     if device == "cpu":
         log(f"CPU 모드: {steps}스텝 (시간이 오래 걸릴 수 있어요)")
 
     from huggingface_hub import try_to_load_from_cache
-    cached = try_to_load_from_cache("black-forest-labs/FLUX.2-klein-4B", "model_index.json")
+    cached = try_to_load_from_cache("black-forest-labs/FLUX.2-klein-base-4B", "model_index.json")
     is_download = cached is None
 
     if is_download:
@@ -561,7 +425,12 @@ def generate(args):
         t = threading.Thread(target=_load_progress_thread, args=(stop_event,), daemon=True)
         t.start()
     else:
-        t = None
+        t = threading.Thread(
+            target=_disk_download_progress_thread,
+            args=(stop_event, "black-forest-labs/FLUX.2-klein-base-4B", 13.0),
+            daemon=True,
+        )
+        t.start()
 
     hf_token = args.hf_token or os.environ.get("HF_TOKEN", "")
     if hf_token:
@@ -570,7 +439,7 @@ def generate(args):
 
     from diffusers import DiffusionPipeline
     pipe = DiffusionPipeline.from_pretrained(
-        "black-forest-labs/FLUX.2-klein-4B",
+        "black-forest-labs/FLUX.2-klein-base-4B",
         torch_dtype=dtype,
     )
 
@@ -613,7 +482,11 @@ def generate(args):
     os.makedirs(args.output, exist_ok=True)
     result.save(os.path.join(args.output, "spritesheet_raw.png"))
 
-    split_frames(result, args.output)
+    kc = k_centroid_downscale(result, factor=4)           # 512→128
+    result_px = kc.resize(result.size, NEAREST)           # 128→512 (pixel art 느낌)
+    result_px.save(os.path.join(args.output, "spritesheet_processed.png"))
+
+    split_frames(result_px, args.output)
     log("완료")
 
     # Godot가 감지하는 완료 신호

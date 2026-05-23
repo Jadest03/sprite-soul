@@ -16,10 +16,11 @@ var SPRITE_SCALE := Vector2(5.0, 5.0)
 var SPRITE_HALF  := Vector2(40.0, 50.0)
 
 const STATE_COLORS = {
-	"idle":  Color(1.0, 0.85, 0.2),
-	"walk":  Color(0.3, 0.6, 1.0),
-	"sleep": Color(0.5, 0.3, 0.8),
-	"react": Color(1.0, 0.5, 0.1),
+	"idle":   Color(1.0, 0.85, 0.2),
+	"walk_l": Color(0.3, 0.6, 1.0),
+	"walk_r": Color(0.3, 0.6, 1.0),
+	"sleep":  Color(0.5, 0.3, 0.8),
+	"react":  Color(1.0, 0.5, 0.1),
 }
 
 var fsm
@@ -38,6 +39,8 @@ var _banzai_timer: float = 0.0
 var _next_banzai: float = 0.0
 var _no_interact_timer: float = 0.0
 var _forced_sleep := false
+var _yawn_tween: Tween = null
+var _walk_scale_mult: float = 1.0
 
 const SLEEP_AFTER := 600.0  # 10분
 
@@ -55,6 +58,7 @@ func _ready() -> void:
 	fsm.state_entered.connect(_on_state_entered)
 	EventBus.chat_requested.connect(_on_chat_requested)
 	EventBus.chat_response_received.connect(_on_chat_response_received)
+	EventBus.chat_bubble_closed.connect(_on_chat_bubble_closed)
 
 	_context_menu = PopupMenu.new()
 	_context_menu.add_item("새 캐릭터 만들기", 0)
@@ -68,8 +72,9 @@ func _ready() -> void:
 	var loaded := _load_sprite_frames()
 	if loaded != null:
 		sprite.sprite_frames = loaded
-		SPRITE_SCALE = Vector2(1.5, 1.5)
-		SPRITE_HALF  = Vector2(72.0, 80.0)
+		SPRITE_SCALE = Vector2(1.0, 1.0)
+		SPRITE_HALF  = Vector2(48.0, 65.0)
+		_walk_scale_mult = _measure_walk_scale_correction()
 	else:
 		sprite.sprite_frames = _build_placeholder_frames()
 	sprite.scale = SPRITE_SCALE
@@ -123,7 +128,7 @@ func _do_walk(delta: float) -> void:
 
 	if position.x < SPRITE_HALF.x or position.x > _screen_rect.size.x - SPRITE_HALF.x:
 		_walk_dir_x *= -1
-		sprite.flip_h = _walk_dir_x < 0
+		_play_walk_anim()
 
 	position.x = clampf(position.x, SPRITE_HALF.x, _screen_rect.size.x - SPRITE_HALF.x)
 
@@ -131,13 +136,23 @@ func _do_react(mouse_pos: Vector2) -> void:
 	sprite.flip_h = mouse_pos.x < position.x
 
 func _on_state_entered(state: int) -> void:
+	if is_instance_valid(_yawn_tween):
+		_yawn_tween.kill()
+	_yawn_tween = null
 	match state:
-		CompanionFSM.State.IDLE:  sprite.play("idle")
+		CompanionFSM.State.IDLE:
+			sprite.scale = SPRITE_SCALE
+			sprite.play("idle")
 		CompanionFSM.State.WALK:
+			sprite.scale = SPRITE_SCALE * _walk_scale_mult
 			_pick_walk_direction()
-			sprite.play("walk")
-		CompanionFSM.State.SLEEP: sprite.play("sleep")
-		CompanionFSM.State.REACT: sprite.play("react")
+			_play_walk_anim()
+		CompanionFSM.State.SLEEP:
+			sprite.scale = SPRITE_SCALE
+			sprite.play("sleep")
+		CompanionFSM.State.REACT:
+			sprite.scale = SPRITE_SCALE
+			sprite.play("react")
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
@@ -163,19 +178,32 @@ func _on_context_menu_pressed(id: int) -> void:
 func _on_chat_requested(_text: String) -> void:
 	_reset_sleep_timer()
 	_chat_locked = true
-	fsm.transition_to(CompanionFSM.State.REACT)
+	fsm.transition_to(CompanionFSM.State.IDLE)
 
 func _on_chat_response_received(_text: String) -> void:
-	_chat_locked = false
+	_chat_locked = true
 	fsm.transition_to(CompanionFSM.State.IDLE)
+
+func _on_chat_bubble_closed() -> void:
+	_chat_locked = false
 
 func _reset_sleep_timer() -> void:
 	_no_interact_timer = 0.0
 	_forced_sleep = false
 
 func _pick_walk_direction() -> void:
-	_walk_dir_x = 1.0 if randf() > 0.5 else -1.0
-	sprite.flip_h = _walk_dir_x < 0
+	var center := _screen_rect.size.x * 0.5
+	var edge_zone := _screen_rect.size.x * 0.25
+	if position.x < center - edge_zone:
+		_walk_dir_x = 1.0   # 왼쪽 벽 근처 → 오른쪽으로
+	elif position.x > center + edge_zone:
+		_walk_dir_x = -1.0  # 오른쪽 벽 근처 → 왼쪽으로
+	else:
+		_walk_dir_x = 1.0 if randf() > 0.5 else -1.0
+
+func _play_walk_anim() -> void:
+	sprite.flip_h = false
+	sprite.play("walk_r" if _walk_dir_x > 0 else "walk_l")
 
 # --- Micro-interactions ---
 
@@ -215,10 +243,12 @@ func _process_idle_breath(delta: float) -> void:
 		sprite.position.y = lerp(sprite.position.y, 0.0, 8.0 * delta)
 
 func _do_yawn() -> void:
-	var tween := create_tween()
-	tween.tween_property(sprite, "scale", SPRITE_SCALE * Vector2(1.16, 0.84), 0.35)
-	tween.tween_property(sprite, "scale", SPRITE_SCALE * Vector2(0.92, 1.12), 0.2)
-	tween.tween_property(sprite, "scale", SPRITE_SCALE, 0.35)
+	if is_instance_valid(_yawn_tween):
+		_yawn_tween.kill()
+	_yawn_tween = create_tween()
+	_yawn_tween.tween_property(sprite, "scale", SPRITE_SCALE * Vector2(1.16, 0.84), 0.35)
+	_yawn_tween.tween_property(sprite, "scale", SPRITE_SCALE * Vector2(0.92, 1.12), 0.2)
+	_yawn_tween.tween_property(sprite, "scale", SPRITE_SCALE, 0.35)
 
 func _do_bounce() -> void:
 	var tween := create_tween()
@@ -236,16 +266,65 @@ func _update_edge_lean(delta: float) -> void:
 
 # --- Real sprite loading ---
 
+func _char_height_in_file(path: String) -> int:
+	var img := Image.load_from_file(path)
+	if not img:
+		return 0
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+	var data := img.get_data()
+	var w := img.get_width()
+	var h := img.get_height()
+	var min_y := h
+	var max_y := -1
+	for y in h:
+		for x in w:
+			if data[(y * w + x) * 4 + 3] > 10:
+				if y < min_y: min_y = y
+				if y > max_y: max_y = y
+	return 0 if max_y < 0 else max_y - min_y + 1
+
+func _measure_walk_scale_correction() -> float:
+	var dir := OS.get_user_data_dir() + "/sprites"
+	var idle_h := _char_height_in_file(dir + "/idle_1.png")
+	if idle_h <= 0:
+		return 1.0
+	# 신규 포맷 우선, 없으면 구버전 walk_*.png 사용
+	var walk_files: Array[String]
+	if FileAccess.file_exists(dir + "/walk_l_1.png"):
+		walk_files = [dir + "/walk_l_1.png", dir + "/walk_l_2.png", dir + "/walk_l_3.png"]
+	else:
+		walk_files = [dir + "/walk_1.png", dir + "/walk_2.png", dir + "/walk_3.png"]
+	var total := 0
+	var count := 0
+	for path in walk_files:
+		var h := _char_height_in_file(path)
+		if h > 0:
+			total += h
+			count += 1
+	if count == 0:
+		return 1.0
+	var avg_h := total / count
+	return float(idle_h) / float(avg_h) if avg_h < idle_h else 1.0
+
 func _load_sprite_frames() -> SpriteFrames:
 	var dir := OS.get_user_data_dir() + "/sprites"
 	if not FileAccess.file_exists(dir + "/idle_1.png"):
 		return null
 
 	var anim_files := {
-		"idle":  ["idle_1.png"],
-		"walk":  ["walk_1.png", "walk_2.png", "walk_3.png"],
-		"sleep": ["sleep_1.png"],
-		"react": ["react_1.png", "react_2.png"],
+		"idle":   ["idle_1.png", "idle_2.png", "idle_3.png"],
+		"walk_l": ["walk_l_1.png", "walk_l_2.png", "walk_l_3.png"],
+		"walk_r": ["walk_r_1.png", "walk_r_2.png", "walk_r_3.png"],
+		"sleep":  ["sleep_1.png"],
+		"react":  ["react_1.png", "react_2.png"],
+	}
+	var anim_speeds := {
+		"idle":   3.0,
+		"walk_l": 4.0,
+		"walk_r": 4.0,
+		"sleep":  1.0,
+		"react":  5.0,
 	}
 	var frames := SpriteFrames.new()
 	frames.remove_animation("default")
@@ -253,11 +332,21 @@ func _load_sprite_frames() -> SpriteFrames:
 	for anim_name: String in anim_files:
 		frames.add_animation(anim_name)
 		frames.set_animation_loop(anim_name, true)
-		frames.set_animation_speed(anim_name, 4.0)
+		frames.set_animation_speed(anim_name, anim_speeds.get(anim_name, 4.0))
 		for filename: String in anim_files[anim_name]:
 			var img := Image.load_from_file(dir + "/" + filename)
 			if img:
 				frames.add_frame(anim_name, ImageTexture.create_from_image(img))
+
+	# 구버전 스프라이트 폴백: walk_l_*.png 없을 때 walk_1/2/3.png 3프레임 사용
+	if frames.get_frame_count("walk_l") == 0 and FileAccess.file_exists(dir + "/walk_1.png"):
+		for filename in ["walk_1.png", "walk_2.png", "walk_3.png"]:
+			var img := Image.load_from_file(dir + "/" + filename)
+			if img:
+				frames.add_frame("walk_r", ImageTexture.create_from_image(img))
+				var img_l := img.duplicate()
+				img_l.flip_x()
+				frames.add_frame("walk_l", ImageTexture.create_from_image(img_l))
 
 	return frames
 

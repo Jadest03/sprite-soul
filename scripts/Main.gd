@@ -176,9 +176,9 @@ func _show_preview() -> void:
 	var sprites_dir := OS.get_user_data_dir() + "/sprites/"
 	_preview_textures = {
 		"idle":  [_load_tex(sprites_dir + "idle_1.png")],
-		"walk":  [_load_tex(sprites_dir + "walk_1.png"),
-		          _load_tex(sprites_dir + "walk_2.png"),
-		          _load_tex(sprites_dir + "walk_3.png")],
+		"walk":  [_load_tex(sprites_dir + "walk_l_1.png"),
+		          _load_tex(sprites_dir + "walk_l_2.png"),
+		          _load_tex(sprites_dir + "walk_l_3.png")],
 		"sleep": [_load_tex(sprites_dir + "sleep_1.png")],
 	}
 	_preview_anim = "idle"
