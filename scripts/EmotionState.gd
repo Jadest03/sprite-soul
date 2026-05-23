@@ -32,5 +32,3 @@ func is_sleepy() -> bool:
 func is_bored() -> bool:
 	return boredom > 0.7
 
-func is_attentive() -> bool:
-	return attention > 0.3
