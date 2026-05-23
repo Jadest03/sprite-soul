@@ -28,6 +28,7 @@ const CONFIRM_H    := 86
 var _pixel_font: Font
 
 var _name_field: LineEdit
+var _appearance_field: LineEdit
 var _hf_token_field: LineEdit
 var _user_name_field: LineEdit
 var _confirm_btn: Button
@@ -165,6 +166,7 @@ func _build_ui() -> void:
 
 	_add_title(vbox)
 	_add_section(vbox, "▶ 이름", _build_name_content())
+	_add_section(vbox, "▶ 외모 설명  (선택)", _build_appearance_content())
 	_add_section(vbox, "▶ 캐릭터 이미지", _build_image_content())
 	_add_section(vbox, "▶ HuggingFace 토큰", _build_token_content())
 	_add_section(vbox, "▶ 내 이름  (선택)", _build_username_content())
@@ -223,6 +225,14 @@ func _add_section(parent: VBoxContainer, title: String, content: Control) -> voi
 func _build_name_content() -> Control:
 	_name_field = _make_input_field("companion의 이름을 입력해줘", FONT_INPUT)
 	return _name_field
+
+func _build_appearance_content() -> Control:
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+	vbox.add_child(_make_label("스프라이트 생성 프롬프트에 반영돼요  (예: girl with pink hair and cat ears)", FONT_SUB, MUTED_COLOR, true))
+	_appearance_field = _make_input_field("파란 눈의 소년, 마법사 모자...", FONT_INPUT)
+	vbox.add_child(_appearance_field)
+	return vbox
 
 func _build_image_content() -> Control:
 	var vbox := VBoxContainer.new()
@@ -315,7 +325,8 @@ func _on_confirm_pressed() -> void:
 	if tf:
 		tf.store_string(hf_token)
 		tf.close()
-	PersonaGenerator.save_persona(name, {}, "")
+	var appearance := _appearance_field.text.strip_edges()
+	PersonaGenerator.save_persona(name, {}, appearance)
 	var user_name := _user_name_field.text.strip_edges()
 	if not user_name.is_empty():
 		var profile := UserProfile.new()

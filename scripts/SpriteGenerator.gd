@@ -46,6 +46,9 @@ func _run_generation(reference_image_path: String, seed: int, script: String) ->
 		args.append_array(["--reference-image", reference_image_path])
 	if seed >= 0:
 		args.append_array(["--seed", str(seed)])
+	var appearance := _load_appearance()
+	if not appearance.is_empty():
+		args.append_array(["--appearance", appearance])
 
 	var output: Array = []
 	var exit_code := OS.execute(python, args, output)
@@ -56,6 +59,19 @@ func _run_generation(reference_image_path: String, seed: int, script: String) ->
 		var detail := "\n".join(output).strip_edges()
 		call_deferred("_on_failed", "스프라이트 생성에 실패했어요. (exit %d)\n%s" % [exit_code, detail])
 
+
+func _load_appearance() -> String:
+	const PERSONA_PATH = "user://persona.json"
+	if not FileAccess.file_exists(PERSONA_PATH):
+		return ""
+	var f := FileAccess.open(PERSONA_PATH, FileAccess.READ)
+	if not f:
+		return ""
+	var parsed: Variant = JSON.parse_string(f.get_as_text())
+	f.close()
+	if parsed is Dictionary:
+		return parsed.get("appearance", "")
+	return ""
 
 func _load_token() -> String:
 	const TOKEN_PATH = "user://hf_token.txt"

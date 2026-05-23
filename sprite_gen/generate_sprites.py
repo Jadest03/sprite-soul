@@ -42,9 +42,10 @@ def detect_device():
         return "cpu", torch.float32
 
 
-def build_prompt() -> str:
+def build_prompt(appearance: str = "") -> str:
+    char_desc = appearance.strip() if appearance.strip() else "a character"
     return (
-        "A pixel art spritesheet of a character. "
+        f"A pixel art spritesheet of {char_desc}. "
         "The spritesheet is a 4 by 4 grid of four rows of frames - "
         "first row is 3 walking frames facing down and 1 frame both arms raised, "
         "second row is 3 walking frames facing left and 1 frame jumping left, "
@@ -453,7 +454,7 @@ def generate(args):
         t.join(timeout=1)
     log("모델 로드 완료")
 
-    prompt = build_prompt()
+    prompt = build_prompt(args.appearance)
     generator = torch.Generator(device).manual_seed(args.seed)
 
     def on_step_end(pipe, step, timestep, callback_kwargs):
@@ -504,6 +505,7 @@ if __name__ == "__main__":
     parser.add_argument("--steps",     type=int, default=None, help="추론 스텝 (기본: GPU=64, CPU=20)")
     parser.add_argument("--hf-token",       default="", help="HuggingFace 토큰 (또는 HF_TOKEN 환경변수)")
     parser.add_argument("--status-file",    default="", help="Godot용 진행 상태 파일 경로")
-    parser.add_argument("--reference-image", default="", help="캐릭터 참고 이미지 경로 (img2img 모드)")
+    parser.add_argument("--reference-image", default="", help="캐릭터 참고 이미지 경로")
+    parser.add_argument("--appearance",      default="", help="외모 설명 텍스트 (프롬프트에 삽입)")
     args = parser.parse_args()
     generate(args)
