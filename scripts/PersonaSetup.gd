@@ -128,9 +128,7 @@ func _make_grid_bg() -> Control:
 	var tile_size := 12
 	var tile_img := Image.create(tile_size, tile_size, false, Image.FORMAT_RGBA8)
 	var line_c := Color(0.11, 0.11, 0.22, 1.0)
-	for x in tile_size:
-		for y in tile_size:
-			tile_img.set_pixel(x, y, BG_COLOR)
+	tile_img.fill(BG_COLOR)
 	for i in tile_size:
 		tile_img.set_pixel(0, i, line_c)
 		tile_img.set_pixel(i, 0, line_c)

@@ -17,16 +17,15 @@ func add(role: String, content: String) -> void:
 	_session.append(msg)
 	_persistent.append(msg)
 	if _persistent.size() > MAX_PERSIST:
-		_persistent = _persistent.slice(_persistent.size() - MAX_PERSIST)
+		_persistent.pop_front()
 	_save()
 
 # Ollama에 보낼 전체 messages 배열 반환 (system prompt 포함)
 func build_messages(system_prompt: String) -> Array:
 	var msgs: Array = [{"role": "system", "content": system_prompt}]
-	var history := _session
-	if history.size() > MAX_SESSION:
-		history = history.slice(history.size() - MAX_SESSION)
-	msgs.append_array(history)
+	var start := maxi(0, _session.size() - MAX_SESSION)
+	for i in range(start, _session.size()):
+		msgs.append(_session[i])
 	return msgs
 
 func _save() -> void:
