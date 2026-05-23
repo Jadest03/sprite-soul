@@ -18,11 +18,6 @@ func tick(delta: float) -> void:
 	affection = clampf(affection + DECAY_RATE["affection"] * delta, 0.0, 1.0)
 	attention = clampf(attention + DECAY_RATE["attention"] * delta, 0.0, 1.0)
 
-func on_interaction() -> void:
-	attention = 1.0
-	boredom   = maxf(0.0, boredom - 0.2)
-	affection = minf(1.0, affection + 0.05)
-
 func on_click() -> void:
 	attention = 1.0
 	energy    = minf(1.0, energy + 0.1)

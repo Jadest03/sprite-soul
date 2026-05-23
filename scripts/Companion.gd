@@ -37,12 +37,8 @@ var _context_menu: PopupMenu
 var _breath_time: float = 0.0
 var _banzai_timer: float = 0.0
 var _next_banzai: float = 0.0
-var _no_interact_timer: float = 0.0
-var _forced_sleep := false
 var _yawn_tween: Tween = null
 var _walk_scale_mult: float = 1.0
-
-const SLEEP_AFTER := 600.0  # 10분
 
 @onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
 
@@ -95,14 +91,9 @@ func _process(delta: float) -> void:
 	var mouse_near := position.distance_to(mouse_pos) < MOUSE_NEAR_DISTANCE
 
 	if not _chat_locked:
-		_no_interact_timer += delta
-		if not _forced_sleep and _no_interact_timer >= SLEEP_AFTER:
-			_forced_sleep = true
-			fsm.transition_to(CompanionFSM.State.SLEEP)
-		if not _forced_sleep:
-			var next: int = behavior.select(fsm, emotion, mouse_near)
-			if next != fsm.current_state:
-				fsm.transition_to(next)
+		var next: int = behavior.select(fsm, emotion, mouse_near)
+		if next != fsm.current_state:
+			fsm.transition_to(next)
 
 	_process_state(delta, mouse_pos)
 	_process_idle_micro(delta)
@@ -157,7 +148,6 @@ func _on_state_entered(state: int) -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		if position.distance_to(get_viewport().get_mouse_position()) < MOUSE_NEAR_DISTANCE:
-			_reset_sleep_timer()
 			if fsm.current_state == CompanionFSM.State.SLEEP:
 				emotion.wake_up()
 				fsm.transition_to(CompanionFSM.State.IDLE)
@@ -176,7 +166,6 @@ func _on_context_menu_pressed(id: int) -> void:
 		1: quit_requested.emit()
 
 func _on_chat_requested(_text: String) -> void:
-	_reset_sleep_timer()
 	_chat_locked = true
 	fsm.transition_to(CompanionFSM.State.IDLE)
 
@@ -186,10 +175,6 @@ func _on_chat_response_received(_text: String) -> void:
 
 func _on_chat_bubble_closed() -> void:
 	_chat_locked = false
-
-func _reset_sleep_timer() -> void:
-	_no_interact_timer = 0.0
-	_forced_sleep = false
 
 func _pick_walk_direction() -> void:
 	var center := _screen_rect.size.x * 0.5
