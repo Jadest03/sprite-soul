@@ -130,19 +130,17 @@ func _on_state_entered(state: int) -> void:
 	if is_instance_valid(_yawn_tween):
 		_yawn_tween.kill()
 	_yawn_tween = null
+	sprite.scale = SPRITE_SCALE
 	match state:
 		CompanionFSM.State.IDLE:
-			sprite.scale = SPRITE_SCALE
 			sprite.play("idle")
 		CompanionFSM.State.WALK:
 			sprite.scale = SPRITE_SCALE * _walk_scale_mult
 			_pick_walk_direction()
 			_play_walk_anim()
 		CompanionFSM.State.SLEEP:
-			sprite.scale = SPRITE_SCALE
 			sprite.play("sleep")
 		CompanionFSM.State.REACT:
-			sprite.scale = SPRITE_SCALE
 			sprite.play("react")
 
 func _input(event: InputEvent) -> void:
