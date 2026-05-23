@@ -227,6 +227,7 @@ func _process_idle_breath(delta: float) -> void:
 		_breath_time = 0.0
 		sprite.position.y = lerp(sprite.position.y, 0.0, 8.0 * delta)
 
+
 func _do_yawn() -> void:
 	if is_instance_valid(_yawn_tween):
 		_yawn_tween.kill()

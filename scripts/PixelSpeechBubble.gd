@@ -12,6 +12,7 @@ const MARGIN_Y   := PX * 4  # vertical margin on each side
 
 var label: Label
 var _font: Font
+var _tail_x: float = -1.0  # -1 = use center; set via set_tail_x()
 
 func _ready() -> void:
 	clip_contents = false
@@ -28,6 +29,10 @@ func _ready() -> void:
 		label.add_theme_font_override("font", _font)
 	add_child(label)
 	resized.connect(queue_redraw)
+
+func set_tail_x(tx: float) -> void:
+	_tail_x = tx
+	queue_redraw()
 
 func set_text(t: String) -> void:
 	var tw := _text_width(t)
@@ -59,8 +64,9 @@ func _draw() -> void:
 	var w := size.x
 	var h := size.y
 	var p := float(PX)
-	var tc := w * 0.5
 	var hw := float(TOP_HW)
+	var raw_tc := _tail_x if _tail_x >= 0.0 else w * 0.5
+	var tc := clampf(raw_tc, hw + p * 3.0, w - hw - p * 3.0)
 
 	# Body fill
 	draw_rect(Rect2(p*2, p*2, w - p*4, h - p*4), C_FILL)

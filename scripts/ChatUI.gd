@@ -85,6 +85,7 @@ func _update_bubble_position() -> void:
 	var x := clampf(pos.x - bsize.x * 0.5, 4.0, 296.0 - bsize.x)
 	var y := maxf(4.0, pos.y - companion.SPRITE_HALF.y * 1.2 - 8.0 - bsize.y)
 	_bubble.position = Vector2(x, y)
+	_psb.set_tail_x(pos.x - x)
 
 func _on_companion_clicked() -> void:
 	if _waiting:
