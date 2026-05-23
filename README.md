@@ -175,15 +175,17 @@ After generation, a preview screen shows idle/walk/sleep animations. Click **이
 - **Left-click** the companion to open the input box
 - Type your message and press Enter
 - The companion responds in a speech bubble with a typewriter effect
+- A `...` thinking bubble appears while waiting for a response
 - The bubble auto-hides after 5 seconds
 
 ### Interacting
 | Action | Result |
 |--------|--------|
-| Left-click | Open chat input |
+| Left-click | Open chat input (companion bounces) |
 | Left-click (while input open) | Close input |
 | Right-click | Context menu (reset / quit) |
 | Click while sleeping | Wake up |
+| ESC | Close chat input |
 
 ### Reset / New Character
 Right-click → **새 캐릭터 만들기** — clears the persona, sprites, memory, and returns to setup.
