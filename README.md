@@ -4,13 +4,18 @@
   <h1>SpriteSoul</h1>
 
   <p>A tiny pixel companion that lives on your desktop —<br>watches what you do, remembers your conversations, and talks like a friend.</p>
+
+  <img src="docs/preview.gif" width="180" />
+
+  <br/>
+  <sub>Generated from a reference image using FLUX.2 + PixelArt LoRA — running fully local</sub>
 </div>
 
 ---
 
 ## Features
 
-- **Custom sprite generation** — upload a reference image and generate a unique pixel character using FLUX.2 + PixelArt LoRA
+- **Custom sprite generation** — upload a reference image + appearance description and generate a unique pixel character using FLUX.2-klein + PixelArt LoRA
 - **Local LLM conversation** — chat via Ollama (qwen3-vl), no data leaves your machine
 - **Screen awareness** — the companion watches your screen every 60 seconds and reacts to what you're doing
 - **Memory** — remembers past conversations across sessions
@@ -29,7 +34,7 @@
 | Python | 3.10+ |
 | Ollama | Latest |
 
-> **Note:** Sprite generation requires FLUX.2-klein-4B (~6GB download on first run). If your machine has less than 16GB unified memory, generation may be slow or fail.
+> **Note:** Sprite generation requires FLUX.2-klein-base-4B (~13GB download on first run). If your machine has less than 16GB unified memory, generation may be slow or fail.
 
 ---
 
@@ -63,7 +68,7 @@ pip install -r requirements.txt
 
 ### 4. HuggingFace Token
 
-Sprite generation uses `black-forest-labs/FLUX.2-klein-4B`. You'll need a HuggingFace token to download it on first run.
+Sprite generation uses `black-forest-labs/FLUX.2-klein-base-4B`. You'll need a HuggingFace token to download it on first run.
 
 1. Go to [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
 2. Create a token with **Read** permission
@@ -95,11 +100,12 @@ Then press **Run** in the Godot editor.
 ## First Run
 
 1. **Character name** — give your companion a name
-2. **Reference image** — upload any image (photo, illustration) to base the sprite on
-3. **HuggingFace token** — required for the first sprite generation (~6GB model download)
-4. **Your name** *(optional)* — the companion will use it in conversation
-5. Click **완성** and wait for sprite generation to complete (~5–15 min depending on hardware)
-6. Preview the animations, then click **이대로 시작** to launch the companion
+2. **Appearance description** *(optional)* — describe the character in English (e.g. `girl with pink hair and cat ears`) to guide sprite generation
+3. **Reference image** — upload any image (photo, illustration) to visually condition the sprite generation
+4. **HuggingFace token** — required for the first sprite generation (~13GB model download)
+5. **Your name** *(optional)* — the companion will use it in conversation
+6. Click **완성** and wait for sprite generation to complete (~5–15 min depending on hardware)
+7. Preview the animations, then click **이대로 시작** to launch the companion
 
 ---
 
@@ -145,7 +151,7 @@ Restart Godot after granting permission. Without it, the companion can still cha
 → Ollama is not running. Run `ollama serve` and restart the app.
 
 **Sprite generation fails immediately**
-→ Check that your HuggingFace token is valid. First run downloads ~6GB — make sure you have enough disk space and a stable connection.
+→ Check that your HuggingFace token is valid. First run downloads ~13GB — make sure you have enough disk space and a stable connection.
 
 **Companion only sees the desktop wallpaper**
 → Screen Recording permission is not granted. See [Permissions](#permissions-macos) above.
