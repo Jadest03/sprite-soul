@@ -103,7 +103,28 @@ func _process(delta: float) -> void:
 	_update_passthrough()
 
 func _update_passthrough() -> void:
-	pass  # mouse passthrough not supported on macOS OpenGL renderer
+	var poly := PackedVector2Array()
+	if EventBus.chat_input_open:
+		# 채팅 입력 중엔 전체 창을 interactive로
+		var sz := _screen_rect.size
+		poly = PackedVector2Array([
+			Vector2(0, 0), Vector2(sz.x, 0),
+			Vector2(sz.x, sz.y), Vector2(0, sz.y)
+		])
+	else:
+		# 캐릭터 스프라이트 주변 + 말풍선 영역만 interactive
+		var cx := position.x
+		var cy := position.y
+		var hw := SPRITE_HALF.x + 8.0
+		var hh := SPRITE_HALF.y + 8.0
+		var bubble_top := maxf(0.0, cy - hh - 120.0)  # 말풍선 높이 여유
+		poly = PackedVector2Array([
+			Vector2(cx - hw, bubble_top),
+			Vector2(cx + hw, bubble_top),
+			Vector2(cx + hw, cy + hh),
+			Vector2(cx - hw, cy + hh),
+		])
+	DisplayServer.window_set_mouse_passthrough(poly)
 
 func _process_state(delta: float, mouse_pos: Vector2) -> void:
 	position.y = _ground_y
