@@ -59,7 +59,7 @@ var _screen_timer: Timer
 var _screen_analyzing := false
 var _last_proactive := ""
 var _last_screen_context := ""
-var _screen_perm_ok := false
+var _screen_perm_warned := false
 
 func _ready() -> void:
 	layer = 10
@@ -413,13 +413,6 @@ func _setup_screen_awareness() -> void:
 	get_tree().create_timer(1.0).timeout.connect(_start_screen_capture)
 
 func _start_screen_capture() -> void:
-	_screen_perm_ok = _check_screen_perm()
-	if not _screen_perm_ok:
-		get_tree().create_timer(2.0).timeout.connect(func():
-			var msg := "화면 기록 권한이 없어요! 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록에서 SpriteSoul을 허용 후 재시작해주세요."
-			show_response(msg)
-			EventBus.chat_response_received.emit(msg))
-		return
 	_screen_timer = Timer.new()
 	_screen_timer.wait_time = SCREEN_INTERVAL
 	_screen_timer.one_shot = false
@@ -427,21 +420,23 @@ func _start_screen_capture() -> void:
 	add_child(_screen_timer)
 	_screen_timer.start()
 
-# Returns false only if Python3 ran and explicitly reported no permission.
-# Falls back to true (assume OK) if Python3 unavailable.
-func _check_screen_perm() -> bool:
-	var code := OS.execute("/usr/bin/python3", ["-c",
-		"import ctypes,sys; lib=ctypes.cdll.LoadLibrary('/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics'); lib.CGPreflightScreenCaptureAccess.restype=ctypes.c_bool; sys.exit(0 if lib.CGPreflightScreenCaptureAccess() else 1)"],
-		[])
-	return code != 1
-
 func _capture_and_analyze() -> void:
 	var is_sleeping: bool = companion != null and companion.fsm.current_state == CompanionFSM.State.SLEEP
 	if _screen_analyzing or _waiting or _is_typing or is_sleeping:
 		return
 	var path := "/tmp/sprite_soul_screen.png"
-	OS.execute("/usr/sbin/screencapture", ["-x", path])
-	if not FileAccess.file_exists(path):
+	var helper := OS.get_executable_path().get_base_dir().path_join("sc_helper")
+	var code := OS.execute(helper, [path], [])
+	if code == 2:
+		_screen_timer.stop()
+		if not _screen_perm_warned:
+			_screen_perm_warned = true
+			get_tree().create_timer(0.5).timeout.connect(func():
+				var msg := "화면 기록 권한이 없어요! 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록에서 SpriteSoul을 허용 후 재시작해주세요."
+				show_response(msg)
+				EventBus.chat_response_received.emit(msg))
+		return
+	if code != 0 or not FileAccess.file_exists(path):
 		return
 	OS.execute("/usr/bin/sips", ["-Z", "1280", path])
 	_analyze_screen(path)
