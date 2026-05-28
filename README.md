@@ -46,17 +46,20 @@ Everything runs locally. No cloud, no subscriptions, no data sent anywhere.
 - **FSM-based** — idle, walk, sleep, and react states with natural timing
 - **Emotion system** — internal energy/boredom/affection values decay over time
   - Low energy → falls asleep automatically
-  - High boredom → starts walking
+  - High boredom → starts walking or initiates conversation
   - Click to wake up and boost energy
 - **Micro-interactions** — random yawning stretch, "banzai" pose, breathing animation, edge leaning
 - **Mouse-reactive** — companion locks to IDLE and watches you while you chat
+- **Entrance animation** — pops in with a banzai pose and flash effect on every launch
+- **Click-through overlay** — transparent areas pass mouse events to windows below; only the sprite and speech bubble are interactive
 
 ### Conversation
 - Powered by Ollama (`qwen3-vl:8b-instruct`) running locally
-- Pixel speech bubble with typewriter effect
+- **Streaming responses** — tokens appear in real time as the model generates them
+- Pixel speech bubble renders progressively; a `...` thinking bubble appears while connecting
 - Click the companion to open the input box
 - Short, casual replies — the companion is a friend, not an assistant
-- Proactive comments when screen context changes (35% chance)
+- **Proactive messaging** — initiates conversation when bored (boredom > 70%, 5-minute cooldown), and comments on screen context changes (35% chance)
 
 ### Screen Awareness
 - Captures your screen every 60 seconds using macOS `screencapture`
@@ -69,6 +72,8 @@ Everything runs locally. No cloud, no subscriptions, no data sent anywhere.
 - User's name extracted from natural phrases ("내 이름은 X야", "나는 X야")
 - Persona saved to `user://persona.json` — name, appearance, system prompt
 - Right-click → "새 캐릭터 만들기" to reset and create a new character
+- **Affinity system** — conversation count tracked in `user://affinity.json`; tone shifts across 4 levels (first meeting → acquaintance → close friend → old friend) injected into each prompt
+- **Daily diary** — on each new day, yesterday's conversation is summarized by the LLM into one sentence and stored in `user://diary.json`; the last 3 days are injected into the system prompt so the companion remembers past sessions
 
 ---
 
