@@ -34,6 +34,9 @@ func _save() -> void:
 		file.store_string(JSON.stringify(_persistent))
 		file.close()
 
+func get_persistent() -> Array:
+	return _persistent.duplicate()
+
 func _load() -> void:
 	if not FileAccess.file_exists(SAVE_PATH):
 		return

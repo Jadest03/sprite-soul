@@ -40,6 +40,15 @@ var _got_first_token := false
 # 먼저 말 걸기
 var _boredom_cooldown := 0.0
 
+# 친밀도
+var _affinity_exchanges: int = 0
+
+# 하루 일기
+var _diary_http: HTTPRequest
+var _diary_entries: Array = []
+var _diary_context: String = ""
+var _pending_diary_date: String = ""
+
 var _memory: MemoryStore
 var _profile: UserProfile
 var _system_prompt := ""
@@ -60,6 +69,8 @@ func _ready() -> void:
 	_load_persona()
 	_memory = MemoryStore.new()
 	_profile = UserProfile.new()
+	_load_affinity()
+	_setup_diary()
 	EventBus.companion_clicked.connect(_on_companion_clicked)
 	_setup_screen_awareness()
 
@@ -142,23 +153,20 @@ func _load_persona() -> void:
 func _send_to_ollama(user_msg: String) -> void:
 	_try_extract_name(user_msg)
 	_memory.add("user", user_msg)
+	_affinity_exchanges += 1
+	_save_affinity()
 	_waiting = true
 	_got_first_token = false
 	_show_thinking()
-	var full_prompt := _system_prompt + _profile.to_prompt_fragment()
-	if not _screen_context.is_empty():
-		full_prompt += "\n\n[현재 화면]\n" + _screen_context
-	var messages := _memory.build_messages(full_prompt)
+	var messages := _memory.build_messages(_build_full_prompt())
 	_start_stream(messages)
 
 func _send_proactive_message() -> void:
 	_waiting = true
 	_got_first_token = false
 	_show_thinking()
-	var full_prompt := _system_prompt + _profile.to_prompt_fragment()
+	var full_prompt := _build_full_prompt()
 	full_prompt += "\n\n[대화가 한동안 없었어. 캐릭터가 자연스럽게 먼저 말을 걸어줘. 짧게 1-2문장으로.]"
-	if not _screen_context.is_empty():
-		full_prompt += "\n[현재 화면: " + _screen_context + "]"
 	var messages := _memory.build_messages(full_prompt)
 	_start_stream(messages)
 
@@ -234,6 +242,129 @@ func _parse_stream_chunk(text: String) -> void:
 				EventBus.chat_response_received.emit(_full_text)
 				EventBus.chat_bubble_closed.emit()
 				_hide_timer = BUBBLE_HIDE_DELAY
+
+func _build_full_prompt() -> String:
+	var p := _system_prompt + _profile.to_prompt_fragment() + _affinity_fragment()
+	if not _diary_context.is_empty():
+		p += "\n\n[지난 기억]\n" + _diary_context
+	if not _screen_context.is_empty():
+		p += "\n\n[현재 화면]\n" + _screen_context
+	return p
+
+# ── 친밀도 ────────────────────────────────────────────────
+
+const _AFFINITY_PATH = "user://affinity.json"
+
+func _load_affinity() -> void:
+	if not FileAccess.file_exists(_AFFINITY_PATH):
+		return
+	var f := FileAccess.open(_AFFINITY_PATH, FileAccess.READ)
+	if not f:
+		return
+	var parsed: Variant = JSON.parse_string(f.get_as_text())
+	f.close()
+	if parsed is Dictionary:
+		_affinity_exchanges = int(parsed.get("exchanges", 0))
+
+func _save_affinity() -> void:
+	var f := FileAccess.open(_AFFINITY_PATH, FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify({"exchanges": _affinity_exchanges}))
+		f.close()
+
+func _affinity_fragment() -> String:
+	if _affinity_exchanges < 5:
+		return "\n[우리는 처음 만난 사이야. 조금 조심스럽게 대해줘.]"
+	elif _affinity_exchanges < 20:
+		return "\n[우리는 알아가는 중이야 (%d회 대화). 편하게 대해줘.]" % _affinity_exchanges
+	elif _affinity_exchanges < 50:
+		return "\n[우리는 꽤 친한 친구야 (%d회 대화). 자연스럽고 친근하게.]" % _affinity_exchanges
+	else:
+		return "\n[우리는 오랜 친구야 (%d회 대화). 아주 편하게, 농담도 해.]" % _affinity_exchanges
+
+# ── 하루 일기 ─────────────────────────────────────────────
+
+const _DIARY_PATH      = "user://diary.json"
+const _LAST_DATE_PATH  = "user://last_session_date.txt"
+
+func _setup_diary() -> void:
+	_diary_http = HTTPRequest.new()
+	add_child(_diary_http)
+	_diary_http.request_completed.connect(_on_diary_summarized)
+	_load_diary()
+	_build_diary_context()
+	get_tree().create_timer(2.0).timeout.connect(_check_new_day)
+
+func _load_diary() -> void:
+	if not FileAccess.file_exists(_DIARY_PATH):
+		return
+	var f := FileAccess.open(_DIARY_PATH, FileAccess.READ)
+	if not f:
+		return
+	var parsed: Variant = JSON.parse_string(f.get_as_text())
+	f.close()
+	if parsed is Array:
+		_diary_entries = parsed
+
+func _build_diary_context() -> void:
+	if _diary_entries.is_empty():
+		return
+	var recent := _diary_entries.slice(maxi(0, _diary_entries.size() - 3))
+	var lines := ""
+	for entry in recent:
+		lines += "%s: %s\n" % [entry.get("date", ""), entry.get("summary", "")]
+	_diary_context = lines.strip_edges()
+
+func _check_new_day() -> void:
+	var today := Time.get_date_string_from_system()
+	var last := ""
+	if FileAccess.file_exists(_LAST_DATE_PATH):
+		var f := FileAccess.open(_LAST_DATE_PATH, FileAccess.READ)
+		if f:
+			last = f.get_as_text().strip_edges()
+			f.close()
+	var fw := FileAccess.open(_LAST_DATE_PATH, FileAccess.WRITE)
+	if fw:
+		fw.store_string(today)
+		fw.close()
+	if not last.is_empty() and last != today:
+		_request_diary_summary(last)
+
+func _request_diary_summary(date: String) -> void:
+	var history := _memory.get_persistent()
+	if history.size() < 2:
+		return
+	_pending_diary_date = date
+	var history_text := ""
+	for msg in history:
+		var role: String = "나" if msg.role == "user" else "캐릭터"
+		history_text += "%s: %s\n" % [role, msg.get("content", "")]
+	var prompt := "다음 대화를 한 문장으로 간결하게 요약해줘. 주요 주제나 감정 위주로, 한국어로:\n\n" + history_text
+	var body := JSON.stringify({
+		"model": OLLAMA_MODEL,
+		"messages": [{"role": "user", "content": prompt}],
+		"stream": false,
+		"options": {"num_ctx": 4096, "num_predict": 60, "temperature": 0.5}
+	})
+	_diary_http.request(OLLAMA_URL, ["Content-Type: application/json"], HTTPClient.METHOD_POST, body)
+
+func _on_diary_summarized(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	if code != 200:
+		return
+	var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
+	if not parsed is Dictionary:
+		return
+	var summary: String = parsed.get("message", {}).get("content", "").strip_edges()
+	if summary.is_empty() or _pending_diary_date.is_empty():
+		return
+	_diary_entries.append({"date": _pending_diary_date, "summary": summary})
+	if _diary_entries.size() > 30:
+		_diary_entries = _diary_entries.slice(_diary_entries.size() - 30)
+	var f := FileAccess.open(_DIARY_PATH, FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify(_diary_entries))
+		f.close()
+	_build_diary_context()
 
 func _check_boredom_proactive() -> void:
 	if _boredom_cooldown > 0.0 or companion == null:
