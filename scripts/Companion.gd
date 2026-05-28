@@ -33,6 +33,9 @@ var _screen_rect: Rect2
 var _idle_micro_timer: float = 0.0
 var _next_idle_micro: float = 0.0
 var _chat_locked := false
+var _entering := false
+var _prev_passthrough_pos := Vector2.INF
+var _prev_chat_open := false
 var _context_menu: PopupMenu
 var _breath_time: float = 0.0
 var _banzai_timer: float = 0.0
@@ -81,9 +84,12 @@ func _ready() -> void:
 	_pick_walk_direction()
 	_next_idle_micro = randf_range(6.0, 12.0)
 	_next_banzai = randf_range(20.0, 40.0)
-	sprite.play("idle")
+	_do_entrance()
 
 func _process(delta: float) -> void:
+	if _entering:
+		return
+
 	emotion.tick(delta)
 	fsm.tick(delta)
 
@@ -103,26 +109,27 @@ func _process(delta: float) -> void:
 	_update_passthrough()
 
 func _update_passthrough() -> void:
+	var chat_open := EventBus.chat_input_open
+	if chat_open == _prev_chat_open and position.distance_squared_to(_prev_passthrough_pos) < 1.0:
+		return
+	_prev_chat_open = chat_open
+	_prev_passthrough_pos = position
 	var poly := PackedVector2Array()
-	if EventBus.chat_input_open:
-		# 채팅 입력 중엔 전체 창을 interactive로
+	if chat_open:
 		var sz := _screen_rect.size
 		poly = PackedVector2Array([
 			Vector2(0, 0), Vector2(sz.x, 0),
 			Vector2(sz.x, sz.y), Vector2(0, sz.y)
 		])
 	else:
-		# 캐릭터 스프라이트 주변 + 말풍선 영역만 interactive
-		var cx := position.x
-		var cy := position.y
 		var hw := SPRITE_HALF.x + 8.0
 		var hh := SPRITE_HALF.y + 8.0
-		var bubble_top := maxf(0.0, cy - hh - 120.0)  # 말풍선 높이 여유
+		var bubble_top := maxf(0.0, position.y - hh - 120.0)
 		poly = PackedVector2Array([
-			Vector2(cx - hw, bubble_top),
-			Vector2(cx + hw, bubble_top),
-			Vector2(cx + hw, cy + hh),
-			Vector2(cx - hw, cy + hh),
+			Vector2(position.x - hw, bubble_top),
+			Vector2(position.x + hw, bubble_top),
+			Vector2(position.x + hw, position.y + hh),
+			Vector2(position.x - hw, position.y + hh),
 		])
 	DisplayServer.window_set_mouse_passthrough(poly)
 
@@ -136,7 +143,6 @@ func _process_state(delta: float, mouse_pos: Vector2) -> void:
 
 func _do_walk(delta: float) -> void:
 	position.x += _walk_dir_x * WALK_SPEED * delta
-	position.y = _ground_y
 
 	if position.x < SPRITE_HALF.x or position.x > _screen_rect.size.x - SPRITE_HALF.x:
 		_walk_dir_x *= -1
@@ -148,6 +154,8 @@ func _do_react(mouse_pos: Vector2) -> void:
 	sprite.flip_h = mouse_pos.x < position.x
 
 func _on_state_entered(state: int) -> void:
+	if _entering:
+		return
 	if is_instance_valid(_yawn_tween):
 		_yawn_tween.kill()
 	_yawn_tween = null
@@ -165,6 +173,8 @@ func _on_state_entered(state: int) -> void:
 			sprite.play("react")
 
 func _input(event: InputEvent) -> void:
+	if _entering:
+		return
 	if event is InputEventMouseButton and event.pressed:
 		if position.distance_to(get_viewport().get_mouse_position()) < MOUSE_NEAR_DISTANCE:
 			if fsm.current_state == CompanionFSM.State.SLEEP:
@@ -254,6 +264,25 @@ func _do_yawn() -> void:
 	_yawn_tween.tween_property(sprite, "scale", SPRITE_SCALE * Vector2(1.16, 0.84), 0.35)
 	_yawn_tween.tween_property(sprite, "scale", SPRITE_SCALE * Vector2(0.92, 1.12), 0.2)
 	_yawn_tween.tween_property(sprite, "scale", SPRITE_SCALE, 0.35)
+
+func _do_entrance() -> void:
+	_entering = true
+	sprite.scale = Vector2.ZERO
+	sprite.modulate = Color(2.2, 2.2, 2.2, 1.0)
+	sprite.animation = "react"
+	sprite.frame = 0
+	sprite.stop()
+	var tween := create_tween()
+	tween.tween_property(sprite, "scale", SPRITE_SCALE * 1.22, 0.32) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(sprite, "modulate", Color.WHITE, 0.38)
+	tween.tween_property(sprite, "scale", SPRITE_SCALE, 0.22) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_interval(0.4)
+	tween.tween_callback(func():
+		sprite.play("idle")
+		_entering = false
+	)
 
 func _do_bounce() -> void:
 	var tween := create_tween()

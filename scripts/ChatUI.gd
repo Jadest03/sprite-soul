@@ -13,6 +13,7 @@ const OLLAMA_URL := "http://localhost:11434/api/chat"
 const OLLAMA_MODEL := "qwen3-vl:8b-instruct"
 const SCREEN_INTERVAL := 60.0
 const PROACTIVE_CHANCE := 0.35
+const BOREDOM_PROACTIVE_INTERVAL := 300.0
 
 var companion: Node2D = null
 
@@ -20,7 +21,6 @@ var _bubble: MarginContainer
 var _psb: PixelSpeechBubble
 var _input_row: Control
 var _pib: PixelInputBox
-var _http: HTTPRequest
 
 var _full_text := ""
 var _displayed_chars := 0
@@ -28,6 +28,17 @@ var _typing_timer := 0.0
 var _is_typing := false
 var _hide_timer := 0.0
 var _waiting := false
+
+# 스트리밍
+enum StreamPhase { IDLE, CONNECTING, SENDING, READING }
+var _http_client: HTTPClient
+var _stream_phase := StreamPhase.IDLE
+var _pending_body := ""
+var _stream_accumulator := ""
+var _got_first_token := false
+
+# 먼저 말 걸기
+var _boredom_cooldown := 0.0
 
 var _memory: MemoryStore
 var _profile: UserProfile
@@ -45,12 +56,11 @@ func _ready() -> void:
 	layer = 10
 	_build_bubble()
 	_build_input()
-	_setup_http()
+	_http_client = HTTPClient.new()
 	_load_persona()
 	_memory = MemoryStore.new()
 	_profile = UserProfile.new()
 	EventBus.companion_clicked.connect(_on_companion_clicked)
-	EventBus.chat_response_received.connect(show_response)
 	_setup_screen_awareness()
 
 func _process(delta: float) -> void:
@@ -74,6 +84,12 @@ func _process(delta: float) -> void:
 		if _hide_timer <= 0.0:
 			_bubble.hide()
 			_psb.set_text("")
+
+	_poll_stream()
+
+	if _boredom_cooldown > 0.0:
+		_boredom_cooldown -= delta
+	_check_boredom_proactive()
 
 func _update_input_position() -> void:
 	var vh := get_viewport().get_visible_rect().size.y
@@ -118,11 +134,6 @@ func _on_input_submitted(text: String) -> void:
 
 # --- Ollama 연결 ---
 
-func _setup_http() -> void:
-	_http = HTTPRequest.new()
-	add_child(_http)
-	_http.request_completed.connect(_on_http_completed)
-
 func _load_persona() -> void:
 	var persona := PersonaGenerator.load_persona()
 	if persona.has("system_prompt"):
@@ -132,26 +143,110 @@ func _send_to_ollama(user_msg: String) -> void:
 	_try_extract_name(user_msg)
 	_memory.add("user", user_msg)
 	_waiting = true
+	_got_first_token = false
 	_show_thinking()
-
 	var full_prompt := _system_prompt + _profile.to_prompt_fragment()
 	if not _screen_context.is_empty():
 		full_prompt += "\n\n[현재 화면]\n" + _screen_context
 	var messages := _memory.build_messages(full_prompt)
+	_start_stream(messages)
+
+func _send_proactive_message() -> void:
+	_waiting = true
+	_got_first_token = false
+	_show_thinking()
+	var full_prompt := _system_prompt + _profile.to_prompt_fragment()
+	full_prompt += "\n\n[대화가 한동안 없었어. 캐릭터가 자연스럽게 먼저 말을 걸어줘. 짧게 1-2문장으로.]"
+	if not _screen_context.is_empty():
+		full_prompt += "\n[현재 화면: " + _screen_context + "]"
+	var messages := _memory.build_messages(full_prompt)
+	_start_stream(messages)
+
+func _start_stream(messages: Array) -> void:
 	var body := JSON.stringify({
 		"model": OLLAMA_MODEL,
 		"messages": messages,
-		"stream": false,
+		"stream": true,
 		"keep_alive": "2m",
-		"options": {
-			"num_ctx": 8192,
-			"num_predict": 150,
-			"temperature": 0.9,
-		}
+		"options": {"num_ctx": 8192, "num_predict": 150, "temperature": 0.9}
 	})
-	var err := _http.request(OLLAMA_URL, ["Content-Type: application/json"], HTTPClient.METHOD_POST, body)
-	if err != OK:
-		_on_ollama_error()
+	_pending_body = body
+	_stream_accumulator = ""
+	_stream_phase = StreamPhase.CONNECTING
+	_http_client.close()
+	_http_client.connect_to_host("localhost", 11434)
+
+func _poll_stream() -> void:
+	if _stream_phase == StreamPhase.IDLE:
+		return
+	_http_client.poll()
+	var status := _http_client.get_status()
+	match _stream_phase:
+		StreamPhase.CONNECTING:
+			if status == HTTPClient.STATUS_CONNECTED:
+				_http_client.request(HTTPClient.METHOD_POST, "/api/chat",
+					PackedStringArray(["Content-Type: application/json"]), _pending_body)
+				_stream_phase = StreamPhase.SENDING
+			elif status == HTTPClient.STATUS_CONNECTION_ERROR:
+				_stream_phase = StreamPhase.IDLE
+				_on_ollama_error()
+		StreamPhase.SENDING:
+			if status == HTTPClient.STATUS_BODY:
+				_stream_phase = StreamPhase.READING
+			elif status == HTTPClient.STATUS_CONNECTION_ERROR:
+				_stream_phase = StreamPhase.IDLE
+				_on_ollama_error()
+		StreamPhase.READING:
+			if status == HTTPClient.STATUS_BODY:
+				var chunk := _http_client.read_response_body_chunk()
+				if chunk.size() > 0:
+					_parse_stream_chunk(chunk.get_string_from_utf8())
+			elif status == HTTPClient.STATUS_DISCONNECTED:
+				_stream_phase = StreamPhase.IDLE
+				if _waiting:
+					_on_ollama_error()
+
+func _parse_stream_chunk(text: String) -> void:
+	_stream_accumulator += text
+	var lines := _stream_accumulator.split("\n")
+	_stream_accumulator = lines[-1]
+	for i in range(lines.size() - 1):
+		var line := lines[i].strip_edges()
+		if line.is_empty():
+			continue
+		var parsed: Variant = JSON.parse_string(line)
+		if not parsed is Dictionary:
+			continue
+		var content: String = parsed.get("message", {}).get("content", "")
+		var done: bool = parsed.get("done", false)
+		if not content.is_empty():
+			if not _got_first_token:
+				_got_first_token = true
+				_full_text = ""
+			_full_text += content
+			_psb.set_text(_full_text)
+			_bubble.show()
+		if done:
+			_stream_phase = StreamPhase.IDLE
+			_waiting = false
+			if not _full_text.is_empty():
+				_memory.add("assistant", _full_text)
+				EventBus.chat_response_received.emit(_full_text)
+				EventBus.chat_bubble_closed.emit()
+				_hide_timer = BUBBLE_HIDE_DELAY
+
+func _check_boredom_proactive() -> void:
+	if _boredom_cooldown > 0.0 or companion == null:
+		return
+	if _waiting or _stream_phase != StreamPhase.IDLE or _bubble.visible or _input_row.visible:
+		return
+	if not companion.emotion.is_bored():
+		return
+	if companion.fsm.current_state == CompanionFSM.State.SLEEP:
+		return
+	companion.emotion.boredom = 0.0
+	_boredom_cooldown = BOREDOM_PROACTIVE_INTERVAL
+	_send_proactive_message()
 
 func _try_extract_name(text: String) -> void:
 	# "내 이름은 X야", "나는 X야", "X라고 불러줘" 패턴 감지
@@ -175,25 +270,6 @@ func _try_extract_name(text: String) -> void:
 					_profile.set_name(name)
 					return
 
-func _on_http_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-	_waiting = false
-	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
-		_on_ollama_error()
-		return
-
-	var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
-	if not parsed is Dictionary:
-		_on_ollama_error()
-		return
-
-	var reply: String = parsed.get("message", {}).get("content", "")
-	if reply.is_empty():
-		_on_ollama_error()
-		return
-
-	_memory.add("assistant", reply)
-	EventBus.chat_response_received.emit(reply)
-
 # --- 화면 인식 ---
 
 func _setup_screen_awareness() -> void:
@@ -207,8 +283,9 @@ func _start_screen_capture() -> void:
 	_screen_perm_ok = _check_screen_perm()
 	if not _screen_perm_ok:
 		get_tree().create_timer(2.0).timeout.connect(func():
-			EventBus.chat_response_received.emit(
-				"화면 기록 권한이 없어요! 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록에서 SpriteSoul을 허용 후 재시작해주세요."))
+			var msg := "화면 기록 권한이 없어요! 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록에서 SpriteSoul을 허용 후 재시작해주세요."
+			show_response(msg)
+			EventBus.chat_response_received.emit(msg))
 		return
 	_screen_timer = Timer.new()
 	_screen_timer.wait_time = SCREEN_INTERVAL
@@ -282,11 +359,12 @@ func _on_screen_analyzed(_result: int, response_code: int, _headers: PackedStrin
 	_last_screen_context = _screen_context
 	var is_sleeping: bool = companion != null and companion.fsm.current_state == CompanionFSM.State.SLEEP
 	if not comment.is_empty() and comment != _last_proactive and context_changed \
-			and randf() < PROACTIVE_CHANCE and not _waiting and not _is_typing \
+			and randf() < PROACTIVE_CHANCE and not _waiting and _stream_phase == StreamPhase.IDLE \
 			and not _input_row.visible and not is_sleeping:
 		_last_proactive = comment
 		_memory.add("assistant", comment)
 		EventBus.chat_response_received.emit(comment)
+		show_response(comment)
 
 func _show_thinking() -> void:
 	_full_text = "..."
@@ -298,6 +376,8 @@ func _show_thinking() -> void:
 
 func _on_ollama_error() -> void:
 	_waiting = false
+	_stream_phase = StreamPhase.IDLE
+	show_response("(연결 안 됨)")
 	EventBus.chat_response_received.emit("(연결 안 됨)")
 
 func _set_input_visible(visible: bool) -> void:
