@@ -48,6 +48,7 @@ Everything runs locally. No cloud, no subscriptions, no data sent anywhere.
   - Low energy → falls asleep automatically
   - High boredom → starts walking or initiates conversation
   - Click to wake up and boost energy
+- **Emotion floating icons** — floating `z` (purple) when tired, `...` (yellow) when bored; appear above the companion's head and drift upward
 - **Micro-interactions** — random yawning stretch, "banzai" pose, breathing animation, edge leaning
 - **Mouse-reactive** — companion locks to IDLE and watches you while you chat
 - **Entrance animation** — pops in with a banzai pose and flash effect on every launch
@@ -62,10 +63,11 @@ Everything runs locally. No cloud, no subscriptions, no data sent anywhere.
 - **Proactive messaging** — initiates conversation when bored (boredom > 70%, 5-minute cooldown), and comments on screen context changes (35% chance)
 
 ### Screen Awareness
-- Captures your screen every 60 seconds using macOS `screencapture`
+- Captures your screen every 60 seconds via a bundled `sc_helper` binary using **ScreenCaptureKit**
 - Resizes to 1280px and sends to the vision model
 - Extracts: what you're doing (context) + a casual remark
 - Context is injected into the next chat prompt so the companion knows what you're up to
+- First launch prompts for Screen Recording permission once — persists across sessions
 
 ### Memory & Persona
 - Last 10 conversation turns persisted to `user://memory.json`
