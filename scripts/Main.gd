@@ -367,7 +367,7 @@ func _on_quit_requested() -> void:
 func _on_reset_requested() -> void:
 	PersonaGenerator.delete_persona()
 	_delete_sprites_dir()
-	for fname: String in ["user_profile.json", "memory.json"]:
+	for fname: String in ["user_profile.json", "memory.json", "affinity.json", "diary.json", "last_session_date.txt"]:
 		var path: String = "user://" + fname
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))

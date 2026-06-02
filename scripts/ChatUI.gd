@@ -86,7 +86,6 @@ func _process(delta: float) -> void:
 			if _displayed_chars >= _full_text.length():
 				_is_typing = false
 				_hide_timer = BUBBLE_HIDE_DELAY
-				EventBus.chat_bubble_closed.emit()
 			else:
 				_typing_timer = TYPING_INTERVAL
 
@@ -95,6 +94,7 @@ func _process(delta: float) -> void:
 		if _hide_timer <= 0.0:
 			_bubble.hide()
 			_psb.set_text("")
+			EventBus.chat_bubble_closed.emit()
 
 	_poll_stream()
 
@@ -242,7 +242,6 @@ func _parse_stream_chunk(text: String) -> void:
 			if not _full_text.is_empty():
 				_memory.add("assistant", _full_text)
 				EventBus.chat_response_received.emit(_full_text)
-				EventBus.chat_bubble_closed.emit()
 				_hide_timer = BUBBLE_HIDE_DELAY
 
 func _build_full_prompt() -> String:
