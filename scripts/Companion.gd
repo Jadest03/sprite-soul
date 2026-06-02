@@ -304,7 +304,7 @@ func _process_emotion_icons(delta: float) -> void:
 			_icon_cooldown_z = 8.0
 			_spawn_emotion_icon("z", Color(0.75, 0.6, 1.0))
 
-	if emotion.boredom > 0.7:
+	if emotion.boredom > 0.7 and fsm.current_state != CompanionFSM.State.SLEEP:
 		if _icon_cooldown_dots <= 0.0:
 			_icon_cooldown_dots = 6.0
 			_spawn_emotion_icon("...", Color(1.0, 0.88, 0.45))
