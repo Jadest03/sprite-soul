@@ -43,6 +43,9 @@ var _next_banzai: float = 0.0
 var _yawn_tween: Tween = null
 var _walk_scale_mult: float = 1.0
 
+var _icon_cooldown_z    := 0.0
+var _icon_cooldown_dots := 0.0
+
 @onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
 
 func _ready() -> void:
@@ -107,6 +110,7 @@ func _process(delta: float) -> void:
 	_process_idle_breath(delta)
 	_update_edge_lean(delta)
 	_update_passthrough()
+	_process_emotion_icons(delta)
 
 func _update_passthrough() -> void:
 	var chat_open := EventBus.chat_input_open
@@ -288,6 +292,43 @@ func _do_bounce() -> void:
 	var tween := create_tween()
 	tween.tween_property(sprite, "position:y", -10.0, 0.1)
 	tween.tween_property(sprite, "position:y", 0.0, 0.18)
+
+func _process_emotion_icons(delta: float) -> void:
+	if _entering:
+		return
+	_icon_cooldown_z    = maxf(0.0, _icon_cooldown_z    - delta)
+	_icon_cooldown_dots = maxf(0.0, _icon_cooldown_dots - delta)
+
+	if emotion.energy < 0.3 and fsm.current_state != CompanionFSM.State.SLEEP:
+		if _icon_cooldown_z <= 0.0:
+			_icon_cooldown_z = 8.0
+			_spawn_emotion_icon("z", Color(0.75, 0.6, 1.0))
+
+	if emotion.boredom > 0.7:
+		if _icon_cooldown_dots <= 0.0:
+			_icon_cooldown_dots = 6.0
+			_spawn_emotion_icon("...", Color(1.0, 0.88, 0.45))
+
+func _spawn_emotion_icon(text: String, color: Color) -> void:
+	var label := Label.new()
+	label.text = text
+	var font := load("res://assets/fonts/PixelifySans-Regular.ttf")
+	if font:
+		label.add_theme_font_override("font", font)
+	label.add_theme_font_size_override("font_size", 36)
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.5))
+	label.add_theme_constant_override("shadow_offset_x", 1)
+	label.add_theme_constant_override("shadow_offset_y", 1)
+	var ox := randf_range(-10.0, 10.0)
+	label.position = Vector2(ox - 10.0, -SPRITE_HALF.y - 8.0)
+	add_child(label)
+	var tween := create_tween().set_parallel(true)
+	tween.tween_property(label, "position:y", label.position.y - 30.0, 2.8) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "modulate:a", 0.0, 2.8) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	get_tree().create_timer(2.8).timeout.connect(label.queue_free)
 
 func _update_edge_lean(delta: float) -> void:
 	var target_rotation := 0.0
