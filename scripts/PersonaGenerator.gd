@@ -37,11 +37,10 @@ static func has_saved_persona() -> bool:
 	var sprite_path := OS.get_user_data_dir() + "/sprites/idle_1.png"
 	return FileAccess.file_exists(sprite_path)
 
-static func save_persona(name: String, selections: Dictionary, appearance: String = "") -> void:
+static func save_persona(name: String, appearance: String = "") -> void:
 	var data = {
 		"name": name,
-		"selections": selections,
-		"system_prompt": build_system_prompt(name, selections),
+		"system_prompt": build_system_prompt(name),
 		"appearance": appearance,
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -59,7 +58,7 @@ static func load_persona() -> Dictionary:
 	file.close()
 	return result if result is Dictionary else {}
 
-static func build_system_prompt(name: String, _selections: Dictionary) -> String:
+static func build_system_prompt(name: String) -> String:
 	return SYSTEM_PROMPT_TEMPLATE.replace("{name}", name)
 
 static func delete_persona() -> void:

@@ -97,10 +97,9 @@ func _process(delta: float) -> void:
 	fsm.tick(delta)
 
 	var mouse_pos := get_viewport().get_mouse_position()
-	var mouse_near := position.distance_to(mouse_pos) < MOUSE_NEAR_DISTANCE
 
 	if not _chat_locked:
-		var next: int = behavior.select(fsm, emotion, mouse_near)
+		var next: int = behavior.select(fsm, emotion)
 		if next != fsm.current_state:
 			fsm.transition_to(next)
 

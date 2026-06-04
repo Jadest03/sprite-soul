@@ -324,7 +324,7 @@ func _on_confirm_pressed() -> void:
 		tf.store_string(hf_token)
 		tf.close()
 	var appearance := _appearance_field.text.strip_edges()
-	PersonaGenerator.save_persona(name, {}, appearance)
+	PersonaGenerator.save_persona(name, appearance)
 	var user_name := _user_name_field.text.strip_edges()
 	if not user_name.is_empty():
 		var profile := UserProfile.new()

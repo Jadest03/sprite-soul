@@ -8,7 +8,7 @@ const MIN_WALK_DURATION  = 4.0
 const MAX_WALK_DURATION  = 12.0
 const MIN_SLEEP_DURATION = 8.0
 
-func select(fsm, emotion, _mouse_near: bool) -> int:
+func select(fsm, emotion) -> int:
 	var current: int = fsm.current_state
 	var t: float = fsm.time_in_state()
 
