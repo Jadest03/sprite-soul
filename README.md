@@ -24,7 +24,16 @@
 
 ## Demo
 
-<img src="docs/demo.gif" width="360" />
+<table border="0" cellspacing="8" cellpadding="0">
+  <tr>
+    <td align="center"><img src="docs/demo_chat.gif" width="340" /><br/><sub>💬 채팅</sub></td>
+    <td align="center"><img src="docs/demo_proactive.gif" width="340" /><br/><sub>🗣️ 먼저 말 걸기</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/demo_tired.gif" width="340" /><br/><sub>😴 졸려함</sub></td>
+    <td align="center"><img src="docs/demo_sleep.gif" width="340" /><br/><sub>💤 잠들기</sub></td>
+  </tr>
+</table>
 
 ---
 
