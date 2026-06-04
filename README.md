@@ -22,6 +22,29 @@
 
 ---
 
+## Demo
+
+<!-- DEMO_VIDEO -->
+https://github.com/user-attachments/assets/PLACEHOLDER
+
+---
+
+## Your companion, your character
+
+<div align="center">
+  <sub>Any image becomes a pixel companion — anime, photo, illustration, anything.</sub>
+  <br/><br/>
+
+  <!-- CHARACTER_GALLERY -->
+  <!-- add more: <img src="docs/chars/char_name.webp" height="160" /> -->
+
+  <img src="docs/reference_example.webp" height="120" />
+  &nbsp;→&nbsp;
+  <img src="docs/preview_transparent.webp" height="120" />
+</div>
+
+---
+
 ## What is SpriteSoul?
 
 SpriteSoul is a desktop companion app for macOS. It generates a unique pixel art character from your reference image, places it on your screen as a transparent overlay, and lets it talk with you through a local LLM.
