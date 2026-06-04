@@ -7,7 +7,7 @@
 
   <img src="docs/reference_example.webp" height="220" />
   &nbsp;&nbsp;&nbsp;→&nbsp;&nbsp;&nbsp;
-  <img src="docs/preview_transparent.png" height="220" />
+  <img src="docs/preview_transparent.webp" height="220" />
 
   <br/>
   <sub>Reference image → Generated companion &nbsp;·&nbsp; FLUX.2 + PixelArt LoRA &nbsp;·&nbsp; fully local</sub>
