@@ -24,7 +24,7 @@
 
 ## Demo
 
-https://github.com/Jadest03/sprite-soul/releases/download/v1.0.0/spritesoul_demo.mp4
+https://github.com/Jadest03/sprite-soul/raw/main/docs/demo.mp4
 
 ---
 
