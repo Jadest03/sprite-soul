@@ -24,8 +24,7 @@
 
 ## Demo
 
-<!-- DEMO_VIDEO -->
-https://github.com/user-attachments/assets/PLACEHOLDER
+https://github.com/Jadest03/sprite-soul/releases/download/v1.0.0/spritesoul_demo.mp4
 
 ---
 
