@@ -337,7 +337,9 @@ sprite-soul/
 │   └── fonts/
 │       └── PixelifySans-Regular.ttf
 ├── docs/
-│   └── preview.gif           # Animated preview
+│   ├── reference_example.webp  # Reference image example
+│   ├── preview_transparent.webp # Generated companion animation
+│   └── demo_*.gif              # Feature demo GIFs
 └── scripts/
     └── export_macos.sh       # Build automation script
 ```
