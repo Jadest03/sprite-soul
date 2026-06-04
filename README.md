@@ -5,7 +5,13 @@
 
   <p>A tiny pixel companion that lives on your desktop —<br>watches what you do, remembers your conversations, and talks like a friend.</p>
 
-  <img src="docs/preview.gif" width="180" />
+  <table>
+    <tr>
+      <td align="center"><img src="docs/reference_example.webp" width="180" /><br/><sub>Reference image</sub></td>
+      <td align="center" width="40"></td>
+      <td align="center"><img src="docs/preview.gif" width="180" /><br/><sub>Generated companion</sub></td>
+    </tr>
+  </table>
 
   <br/>
   <sub>Generated from a reference image using FLUX.2 + PixelArt LoRA — running fully local</sub>
