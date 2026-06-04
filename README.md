@@ -24,7 +24,7 @@
 
 ## Demo
 
-<img src="docs/demo.gif" width="700" />
+<img src="docs/demo.gif" width="360" />
 
 ---
 
