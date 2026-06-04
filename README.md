@@ -24,7 +24,7 @@
 
 ## Demo
 
-https://github.com/Jadest03/sprite-soul/raw/main/docs/demo.mp4
+<img src="docs/demo.gif" width="700" />
 
 ---
 
