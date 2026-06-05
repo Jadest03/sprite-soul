@@ -96,14 +96,12 @@ func _process(delta: float) -> void:
 	emotion.tick(delta)
 	fsm.tick(delta)
 
-	var mouse_pos := get_viewport().get_mouse_position()
-
 	if not _chat_locked:
 		var next: int = behavior.select(fsm, emotion)
 		if next != fsm.current_state:
 			fsm.transition_to(next)
 
-	_process_state(delta, mouse_pos)
+	_process_state(delta)
 	_process_idle_micro(delta)
 	_process_banzai_micro(delta)
 	_process_idle_breath(delta)
@@ -136,13 +134,10 @@ func _update_passthrough() -> void:
 		])
 	DisplayServer.window_set_mouse_passthrough(poly)
 
-func _process_state(delta: float, mouse_pos: Vector2) -> void:
+func _process_state(delta: float) -> void:
 	position.y = _ground_y
-	match fsm.current_state:
-		CompanionFSM.State.WALK:
-			_do_walk(delta)
-		CompanionFSM.State.REACT:
-			_do_react(mouse_pos)
+	if fsm.current_state == CompanionFSM.State.WALK:
+		_do_walk(delta)
 
 func _do_walk(delta: float) -> void:
 	position.x += _walk_dir_x * WALK_SPEED * delta
@@ -152,9 +147,6 @@ func _do_walk(delta: float) -> void:
 		_play_walk_anim()
 
 	position.x = clampf(position.x, SPRITE_HALF.x, _screen_rect.size.x - SPRITE_HALF.x)
-
-func _do_react(mouse_pos: Vector2) -> void:
-	sprite.flip_h = mouse_pos.x < position.x
 
 func _on_state_entered(state: int) -> void:
 	if _entering:
@@ -172,8 +164,6 @@ func _on_state_entered(state: int) -> void:
 			_play_walk_anim()
 		CompanionFSM.State.SLEEP:
 			sprite.play("sleep")
-		CompanionFSM.State.REACT:
-			sprite.play("react")
 
 func _input(event: InputEvent) -> void:
 	if _entering:

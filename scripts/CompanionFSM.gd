@@ -4,7 +4,6 @@ enum State {
 	IDLE,
 	WALK,
 	SLEEP,
-	REACT,
 }
 
 var current_state: int = State.IDLE
