@@ -64,6 +64,8 @@ func _setup_setup_window() -> void:
 	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, false)
 	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_TRANSPARENT, false)
 	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_ALWAYS_ON_TOP, false)
+	# ALWAYS_ON_TOP 해제 시 macOS가 창을 뒤로 보내므로 명시적으로 앞으로 가져옴
+	DisplayServer.window_move_to_foreground()
 
 func _launch_setup() -> void:
 	var setup := PersonaSetupScene.instantiate()

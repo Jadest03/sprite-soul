@@ -38,6 +38,21 @@ var _ref_preview: TextureRect
 func _ready() -> void:
 	_pixel_font = load("res://assets/fonts/PixelifySans-Regular.ttf")
 	_build_ui()
+	get_viewport().get_window().focus_exited.connect(_on_window_focus_exited)
+
+func _on_window_focus_exited() -> void:
+	# LineEdit이 활성 상태에서 윈도우 포커스가 빠질 때만 복구
+	# (사용자가 의도적으로 다른 앱 클릭한 경우는 마우스가 창 밖에 있음)
+	if not (get_viewport().gui_get_focus_owner() is LineEdit):
+		return
+	var mouse := DisplayServer.mouse_get_position()
+	var win_rect := Rect2(DisplayServer.window_get_position(), DisplayServer.window_get_size())
+	if not win_rect.has_point(mouse):
+		return
+	get_tree().create_timer(0.1).timeout.connect(func():
+		if is_inside_tree():
+			DisplayServer.window_move_to_foreground()
+	)
 
 # ── 스타일 헬퍼 ──────────────────────────────────────────
 
