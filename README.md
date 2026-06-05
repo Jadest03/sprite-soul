@@ -5,35 +5,11 @@
 
   <p>A tiny pixel companion that lives on your desktop —<br>watches what you do, remembers your conversations, and talks like a friend.</p>
 
-  <img src="docs/reference_example.webp" height="220" />
-  &nbsp;&nbsp;&nbsp;→&nbsp;&nbsp;&nbsp;
-  <img src="docs/preview_transparent.webp" height="220" />
-
-  <br/>
-  <sub>Reference image → Generated companion &nbsp;·&nbsp; FLUX.2 + PixelArt LoRA &nbsp;·&nbsp; fully local</sub>
-
-  <br/><br/>
-
   ![Godot](https://img.shields.io/badge/Godot-4.6-blue?logo=godotengine)
   ![Python](https://img.shields.io/badge/Python-3.10+-yellow?logo=python)
   ![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?logo=apple)
   ![License](https://img.shields.io/badge/License-MIT-green)
 </div>
-
----
-
-## Demo
-
-<table border="0" cellspacing="8" cellpadding="0">
-  <tr>
-    <td align="center"><img src="docs/demo_chat.gif" width="340" /><br/><sub>💬 Chat</sub></td>
-    <td align="center"><img src="docs/demo_proactive.gif" width="340" /><br/><sub>🗣️ Proactive</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/demo_tired.gif" width="340" /><br/><sub>😴 Getting Tired</sub></td>
-    <td align="center"><img src="docs/demo_sleep.gif" width="340" /><br/><sub>💤 Falling Asleep</sub></td>
-  </tr>
-</table>
 
 ---
 
@@ -78,6 +54,21 @@
     </tr>
   </table>
 </div>
+
+---
+
+## Demo
+
+<table border="0" cellspacing="8" cellpadding="0">
+  <tr>
+    <td align="center"><img src="docs/demo_chat.gif" width="340" /><br/><sub>💬 Chat</sub></td>
+    <td align="center"><img src="docs/demo_proactive.gif" width="340" /><br/><sub>🗣️ Proactive</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/demo_tired.gif" width="340" /><br/><sub>😴 Getting Tired</sub></td>
+    <td align="center"><img src="docs/demo_sleep.gif" width="340" /><br/><sub>💤 Falling Asleep</sub></td>
+  </tr>
+</table>
 
 ---
 
