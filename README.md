@@ -43,12 +43,22 @@
   <sub>Any image becomes a pixel companion — anime, photo, illustration, anything.</sub>
   <br/><br/>
 
-  <!-- CHARACTER_GALLERY -->
-  <!-- add more: <img src="docs/chars/char_name.webp" height="160" /> -->
-
-  <img src="docs/reference_example.webp" height="120" />
-  &nbsp;→&nbsp;
-  <img src="docs/preview_transparent.webp" height="120" />
+  <table border="0" cellspacing="16" cellpadding="0">
+    <tr>
+      <td align="center">
+        <img src="docs/reference_example.webp" height="160" /><br/>
+        <sub>→</sub><br/>
+        <img src="docs/preview_transparent.webp" height="160" /><br/>
+        <sub>Itadori</sub>
+      </td>
+      <td align="center">
+        <img src="docs/chars/nezuko_ref.webp" height="160" /><br/>
+        <sub>→</sub><br/>
+        <img src="docs/chars/nezuko.webp" height="160" /><br/>
+        <sub>Nezuko</sub>
+      </td>
+    </tr>
+  </table>
 </div>
 
 ---
