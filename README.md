@@ -26,12 +26,12 @@
 
 <table border="0" cellspacing="8" cellpadding="0">
   <tr>
-    <td align="center"><img src="docs/demo_chat.gif" width="340" /><br/><sub>💬 채팅</sub></td>
-    <td align="center"><img src="docs/demo_proactive.gif" width="340" /><br/><sub>🗣️ 먼저 말 걸기</sub></td>
+    <td align="center"><img src="docs/demo_chat.gif" width="340" /><br/><sub>💬 Chat</sub></td>
+    <td align="center"><img src="docs/demo_proactive.gif" width="340" /><br/><sub>🗣️ Proactive</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/demo_tired.gif" width="340" /><br/><sub>😴 졸려함</sub></td>
-    <td align="center"><img src="docs/demo_sleep.gif" width="340" /><br/><sub>💤 잠들기</sub></td>
+    <td align="center"><img src="docs/demo_tired.gif" width="340" /><br/><sub>😴 Getting Tired</sub></td>
+    <td align="center"><img src="docs/demo_sleep.gif" width="340" /><br/><sub>💤 Falling Asleep</sub></td>
   </tr>
 </table>
 
