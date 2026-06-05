@@ -221,7 +221,18 @@ func _add_section(parent: VBoxContainer, title: String, content: Control) -> voi
 # ── 섹션별 컨텐츠 빌드 ───────────────────────────────────
 
 func _grab_window_focus() -> void:
+	DisplayServer.window_move_to_foreground()
 	get_viewport().get_window().grab_focus()
+	# macOS processes focus changes after focus_entered fires — regrab after settling
+	get_tree().create_timer(0.05).timeout.connect(func():
+		if is_inside_tree():
+			DisplayServer.window_move_to_foreground()
+			get_viewport().get_window().grab_focus()
+	)
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		DisplayServer.window_move_to_foreground()
 
 func _build_name_content() -> Control:
 	_name_field = _make_input_field("companion의 이름을 입력해줘", FONT_INPUT)
@@ -266,6 +277,10 @@ func _build_image_content() -> Control:
 	add_child(dialog)
 
 	pick_btn.pressed.connect(func(): dialog.popup_centered(Vector2(700, 500)))
+	dialog.visibility_changed.connect(func():
+		if not dialog.visible:
+			_grab_window_focus()
+	)
 	dialog.file_selected.connect(func(path: String):
 		_reference_image_path = path
 		path_label.text = path.get_file()
