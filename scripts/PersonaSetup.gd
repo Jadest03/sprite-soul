@@ -220,8 +220,12 @@ func _add_section(parent: VBoxContainer, title: String, content: Control) -> voi
 
 # ── 섹션별 컨텐츠 빌드 ───────────────────────────────────
 
+func _grab_window_focus() -> void:
+	get_viewport().get_window().grab_focus()
+
 func _build_name_content() -> Control:
 	_name_field = _make_input_field("companion의 이름을 입력해줘", FONT_INPUT)
+	_name_field.focus_entered.connect(_grab_window_focus)
 	return _name_field
 
 func _build_appearance_content() -> Control:
@@ -229,6 +233,7 @@ func _build_appearance_content() -> Control:
 	vbox.add_theme_constant_override("separation", 6)
 	vbox.add_child(_make_label("스프라이트 생성 프롬프트에 반영돼요  (예: girl with pink hair and cat ears)", FONT_SUB, MUTED_COLOR, true))
 	_appearance_field = _make_input_field("파란 눈의 소년, 마법사 모자...", FONT_INPUT)
+	_appearance_field.focus_entered.connect(_grab_window_focus)
 	vbox.add_child(_appearance_field)
 	return vbox
 
@@ -284,6 +289,7 @@ func _build_token_content() -> Control:
 	vbox.add_theme_constant_override("separation", 6)
 	vbox.add_child(_make_label("huggingface.co/settings/tokens 에서 발급 (최초 1회)", FONT_SUB, MUTED_COLOR, true))
 	_hf_token_field = _make_input_field("hf_...", FONT_INPUT, true)
+	_hf_token_field.focus_entered.connect(_grab_window_focus)
 	var saved := _load_saved_token()
 	if not saved.is_empty():
 		_hf_token_field.text = saved
@@ -292,6 +298,7 @@ func _build_token_content() -> Control:
 
 func _build_username_content() -> Control:
 	_user_name_field = _make_input_field("캐릭터가 나를 부를 이름", FONT_INPUT)
+	_user_name_field.focus_entered.connect(_grab_window_focus)
 	return _user_name_field
 
 func _load_saved_token() -> String:
