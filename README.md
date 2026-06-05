@@ -95,14 +95,14 @@ Everything runs locally. No cloud, no subscriptions, no data sent anywhere.
 - K-centroid downscaling produces clean pixel art edges
 
 ### Companion Behavior
-- **FSM-based** — idle, walk, sleep, and react states with natural timing
-- **Emotion system** — internal energy/boredom/affection values decay over time
+- **FSM-based** — idle, walk, and sleep states with natural timing
+- **Emotion system** — internal energy/boredom values decay over time
   - Low energy → falls asleep automatically
   - High boredom → starts walking or initiates conversation
   - Click to wake up and boost energy
 - **Emotion floating icons** — floating `z` (purple) when tired, `...` (yellow) when bored; appear above the companion's head and drift upward
 - **Micro-interactions** — random yawning stretch, "banzai" pose, breathing animation, edge leaning
-- **Mouse-reactive** — companion locks to IDLE and watches you while you chat
+- **Mouse-reactive** — companion locks to IDLE while you chat
 - **Entrance animation** — pops in with a banzai pose and flash effect on every launch
 - **Click-through overlay** — transparent areas pass mouse events to windows below; only the sprite and speech bubble are interactive
 
@@ -189,7 +189,7 @@ Sprite generation uses `black-forest-labs/FLUX.2-klein-base-4B`. A free HuggingF
 ## Installation
 
 ```bash
-git clone https://github.com/mingyu/sprite-soul.git
+git clone https://github.com/Jadest03/sprite-soul.git
 cd sprite-soul
 
 # Set up Python environment
@@ -274,10 +274,9 @@ Restart after granting. Without it, the companion can still chat but won't react
 │  │ idle     │             │ (utility-based)        │  │
 │  │ walk     │             └───────────────────────┘  │
 │  │ sleep    │                         ▲               │
-│  │ react    │             ┌───────────┴───────────┐  │
-│  └──────────┘             │    EmotionState        │  │
-│       │                   │ energy / boredom /     │  │
-│       │ state anim        │ affection / attention  │  │
+│  └──────────┘             ┌───────────┴───────────┐  │
+│       │                   │    EmotionState        │  │
+│       │ state anim        │ energy / boredom       │  │
 │       ▼                   └───────────────────────┘  │
 │  AnimatedSprite2D                                     │
 │                                                       │
@@ -338,9 +337,9 @@ sprite-soul/
 ├── scripts/
 │   ├── Main.gd               # App lifecycle, window management
 │   ├── Companion.gd          # Behavior loop, micro-interactions
-│   ├── CompanionFSM.gd       # State machine (idle/walk/sleep/react)
+│   ├── CompanionFSM.gd       # State machine (idle/walk/sleep)
 │   ├── BehaviorSelector.gd   # Utility-based state transitions
-│   ├── EmotionState.gd       # Energy/boredom/affection simulation
+│   ├── EmotionState.gd       # Energy/boredom simulation
 │   ├── ChatUI.gd             # Ollama integration, screen awareness
 │   ├── PixelSpeechBubble.gd  # Pixel-art speech bubble renderer
 │   ├── PixelInputBox.gd      # Chat input UI
