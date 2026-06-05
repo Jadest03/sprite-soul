@@ -23,31 +23,31 @@
     <tr>
       <td align="center">
         <img src="docs/reference_example.webp" height="160" /><br/>
-        <sub>→</sub><br/>
+        ↓<br/>
         <img src="docs/preview_transparent.webp" height="160" /><br/>
         <sub>Itadori</sub>
       </td>
       <td align="center">
         <img src="docs/chars/nezuko_ref.webp" height="160" /><br/>
-        <sub>→</sub><br/>
+        ↓<br/>
         <img src="docs/chars/nezuko.webp" height="160" /><br/>
         <sub>Nezuko</sub>
       </td>
       <td align="center">
         <img src="docs/chars/goku_ref.webp" height="160" /><br/>
-        <sub>→</sub><br/>
+        ↓<br/>
         <img src="docs/chars/goku.webp" height="160" /><br/>
         <sub>Goku</sub>
       </td>
       <td align="center">
         <img src="docs/chars/luffy_ref2.png" height="160" /><br/>
-        <sub>→</sub><br/>
+        ↓<br/>
         <img src="docs/chars/luffy.webp" height="160" /><br/>
         <sub>Luffy</sub>
       </td>
       <td align="center">
         <img src="docs/chars/ash_ref2.png" height="160" /><br/>
-        <sub>→</sub><br/>
+        ↓<br/>
         <img src="docs/chars/ash.webp" height="160" /><br/>
         <sub>Ash</sub>
       </td>
