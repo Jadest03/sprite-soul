@@ -63,6 +63,12 @@
         <img src="docs/chars/goku.webp" height="160" /><br/>
         <sub>Goku</sub>
       </td>
+      <td align="center">
+        <img src="docs/chars/luffy_ref.png" height="160" /><br/>
+        <sub>→</sub><br/>
+        <img src="docs/chars/luffy.webp" height="160" /><br/>
+        <sub>Luffy</sub>
+      </td>
     </tr>
   </table>
 </div>
