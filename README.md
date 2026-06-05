@@ -69,6 +69,12 @@
         <img src="docs/chars/luffy.webp" height="160" /><br/>
         <sub>Luffy</sub>
       </td>
+      <td align="center">
+        <img src="docs/chars/ash_ref.png" height="160" /><br/>
+        <sub>→</sub><br/>
+        <img src="docs/chars/ash.webp" height="160" /><br/>
+        <sub>Ash</sub>
+      </td>
     </tr>
   </table>
 </div>
