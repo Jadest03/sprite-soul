@@ -155,8 +155,8 @@ Download from [godotengine.org](https://godotengine.org/download).
 ### 2. Ollama + Model
 
 ```bash
-# Install Ollama
-brew install ollama
+# Install Ollama (official installer required — Homebrew version is missing required binaries)
+curl -fsSL https://ollama.com/install.sh | sh
 
 # Pull the vision-language model (7.6GB)
 ollama pull gemma4:12b-it-q4_K_M
