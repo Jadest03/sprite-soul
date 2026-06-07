@@ -107,7 +107,7 @@ Everything runs locally. No cloud, no subscriptions, no data sent anywhere.
 - **Click-through overlay** — transparent areas pass mouse events to windows below; only the sprite and speech bubble are interactive
 
 ### Conversation
-- Powered by Ollama (`qwen3-vl:8b-instruct`) running locally
+- Powered by Ollama (`gemma4:12b-it-q4_K_M`) running locally
 - **Streaming responses** — tokens appear in real time as the model generates them
 - Pixel speech bubble renders progressively; a `...` thinking bubble appears while connecting
 - Click the companion to open the input box
@@ -158,8 +158,8 @@ Download from [godotengine.org](https://godotengine.org/download).
 # Install Ollama
 brew install ollama
 
-# Pull the vision-language model (6.1GB)
-ollama pull qwen3-vl:8b-instruct
+# Pull the vision-language model (7.6GB)
+ollama pull gemma4:12b-it-q4_K_M
 
 # Start the server (keep this running in the background)
 ollama serve
@@ -318,7 +318,7 @@ Sprite Generation (one-time at setup):
 ### Conversation Pipeline
 1. User input → `MemoryStore.build_messages()` → full message history with system prompt
 2. Screen context (if available) appended to system prompt
-3. POST to `http://localhost:11434/api/chat` with `qwen3-vl:8b-instruct`
+3. POST to `http://localhost:11434/api/chat` with `gemma4:12b-it-q4_K_M`
 4. Response streamed back, typed out character by character in the speech bubble
 
 ---
