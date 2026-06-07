@@ -137,7 +137,7 @@ Everything runs locally. No cloud, no subscriptions, no data sent anywhere.
 |-----------|-------------|
 | OS | macOS (Apple Silicon recommended) |
 | RAM | 16GB+ unified memory (for FLUX.2 sprite generation) |
-| Disk | 20GB+ free (13GB model + generated sprites) |
+| Disk | 25GB+ free (13GB FLUX model + 8GB LLM + generated sprites) |
 | Godot | 4.6 |
 | Python | 3.10+ |
 | Ollama | Latest |
@@ -359,7 +359,8 @@ sprite-soul/
 │   ├── preview_transparent.webp # Generated companion animation
 │   └── demo_*.gif              # Feature demo GIFs
 └── scripts/
-    └── export_macos.sh       # Build automation script
+    ├── ...gd                  # GDScript files (listed above)
+    └── export_macos.sh        # Build automation script
 ```
 
 ---
@@ -393,7 +394,7 @@ The output is at `build/SpriteSoul.app`.
 → Screen Recording permission is not granted. See [Permissions](#permissions-macos) above.
 
 **Sprite generation is very slow**
-→ Normal on first run (model load + generation). Apple Silicon M1/M2/M3 with 16GB takes ~10 min. Subsequent runs are faster (model already cached).
+→ Normal on first run (model load + generation). Apple Silicon M1/M2/M3/M4 with 16GB takes ~10 min. Subsequent runs are faster (model already cached).
 
 **App doesn't start after reset**
 → Make sure `ollama serve` is running before launching.
