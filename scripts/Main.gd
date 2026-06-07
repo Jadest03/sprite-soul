@@ -49,7 +49,7 @@ func _notification(what: int) -> void:
 		get_tree().quit()
 
 func _unload_ollama_model() -> void:
-	var body := '{"model":"qwen3-vl:8b-instruct","messages":[],"keep_alive":0}'
+	var body := '{"model":"gemma4:12b-it-q4_K_M","messages":[],"keep_alive":0}'
 	OS.execute("/usr/bin/curl", ["-s", "-X", "POST", "http://localhost:11434/api/chat",
 		"-H", "Content-Type: application/json", "-d", body])
 
