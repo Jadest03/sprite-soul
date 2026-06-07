@@ -10,7 +10,7 @@ const PixelInputBox = preload("res://scripts/PixelInputBox.gd")
 const BUBBLE_HIDE_DELAY := 5.0
 const TYPING_INTERVAL := 0.03
 const OLLAMA_URL := "http://localhost:11434/api/chat"
-const OLLAMA_MODEL := "qwen3-vl:8b-instruct"
+const OLLAMA_MODEL := "gemma4:12b-it-q4_K_M"
 const SCREEN_INTERVAL := 60.0
 const PROACTIVE_CHANCE := 0.35
 const BOREDOM_PROACTIVE_INTERVAL := 300.0
@@ -177,6 +177,7 @@ func _start_stream(messages: Array) -> void:
 		"model": OLLAMA_MODEL,
 		"messages": messages,
 		"stream": true,
+		"think": false,
 		"keep_alive": "2m",
 		"options": {"num_ctx": 8192, "num_predict": 150, "temperature": 0.9}
 	})
@@ -345,6 +346,7 @@ func _request_diary_summary(date: String) -> void:
 		"model": OLLAMA_MODEL,
 		"messages": [{"role": "user", "content": prompt}],
 		"stream": false,
+		"think": false,
 		"options": {"num_ctx": 4096, "num_predict": 60, "temperature": 0.5}
 	})
 	_diary_http.request(OLLAMA_URL, ["Content-Type: application/json"], HTTPClient.METHOD_POST, body)
@@ -460,6 +462,7 @@ func _analyze_screen(path: String) -> void:
 		"model": OLLAMA_MODEL,
 		"messages": [{"role": "user", "content": prompt, "images": [b64]}],
 		"stream": false,
+		"think": false,
 		"keep_alive": "2m",
 		"options": {"num_ctx": 4096, "num_predict": 80, "temperature": 0.7}
 	})
