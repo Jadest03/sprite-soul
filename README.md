@@ -188,6 +188,17 @@ Sprite generation uses `black-forest-labs/FLUX.2-klein-base-4B`. A free HuggingF
 
 ## Installation
 
+### Option A: Download the pre-built app (recommended)
+
+1. Download `SpriteSoul-app.zip` from the [latest release](https://github.com/Jadest03/sprite-soul/releases/latest)
+2. Unzip and move `SpriteSoul.app` to your Applications folder
+3. Complete the [Prerequisites](#prerequisites) (Ollama + Python environment)
+4. Launch `SpriteSoul.app`
+
+> On first launch, macOS may show an "unidentified developer" warning. Go to **System Settings → Privacy & Security** and click **Open Anyway**.
+
+### Option B: Run from source
+
 ```bash
 git clone https://github.com/Jadest03/sprite-soul.git
 cd sprite-soul
