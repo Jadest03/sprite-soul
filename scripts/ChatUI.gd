@@ -198,13 +198,15 @@ func _poll_stream() -> void:
 				_http_client.request(HTTPClient.METHOD_POST, "/api/chat",
 					PackedStringArray(["Content-Type: application/json"]), _pending_body)
 				_stream_phase = StreamPhase.SENDING
-			elif status == HTTPClient.STATUS_CONNECTION_ERROR:
+			elif status in [HTTPClient.STATUS_CONNECTION_ERROR,
+					HTTPClient.STATUS_CANT_CONNECT, HTTPClient.STATUS_CANT_RESOLVE]:
 				_stream_phase = StreamPhase.IDLE
 				_on_ollama_error()
 		StreamPhase.SENDING:
 			if status == HTTPClient.STATUS_BODY:
 				_stream_phase = StreamPhase.READING
-			elif status == HTTPClient.STATUS_CONNECTION_ERROR:
+			elif status in [HTTPClient.STATUS_CONNECTION_ERROR,
+					HTTPClient.STATUS_CANT_CONNECT, HTTPClient.STATUS_CANT_RESOLVE]:
 				_stream_phase = StreamPhase.IDLE
 				_on_ollama_error()
 		StreamPhase.READING:
