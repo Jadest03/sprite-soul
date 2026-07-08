@@ -11,6 +11,9 @@ const PIXEL_FONT = preload("res://assets/fonts/PixelifySans-Regular.ttf")
 const WALK_SPEED = 60.0
 const MOUSE_NEAR_DISTANCE = 80.0
 const EDGE_LEAN_THRESHOLD = 35.0
+const DRAG_THRESHOLD = 10.0        # px 이상 움직이면 클릭이 아니라 드래그
+const AWAY_SLEEP_SECONDS = 300.0   # 마우스가 이 시간 동안 멈추면 잠듦
+const REUNION_SECONDS = 900.0      # 이 시간 이상 자리 비운 뒤 돌아오면 인사
 
 # 실제 스프라이트 vs placeholder에 따라 _ready에서 결정
 var SPRITE_SCALE := Vector2(5.0, 5.0)
@@ -46,6 +49,16 @@ var _walk_scale_mult: float = 1.0
 
 var _icon_cooldown_z    := 0.0
 var _icon_cooldown_dots := 0.0
+
+var _pressed_on_companion := false
+var _press_pos := Vector2.INF
+var _drag_offset := Vector2.ZERO
+var _falling := false
+
+var _away_check_accum := 0.0
+var _last_global_mouse := Vector2.INF
+var _away_seconds := 0.0
+var _away_sleeping := false
 
 @onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
 
@@ -97,10 +110,13 @@ func _process(delta: float) -> void:
 	emotion.tick(delta)
 	fsm.tick(delta)
 
-	if not _chat_locked:
+	if not _chat_locked and not _falling and not _away_sleeping \
+			and fsm.current_state != CompanionFSM.State.HELD:
 		var next: int = behavior.select(fsm, emotion)
 		if next != fsm.current_state:
 			fsm.transition_to(next)
+
+	_process_away(delta)
 
 	_process_state(delta)
 	_process_idle_micro(delta)
@@ -137,6 +153,11 @@ func _update_passthrough() -> void:
 	DisplayServer.window_set_mouse_passthrough(poly)
 
 func _process_state(delta: float) -> void:
+	if fsm.current_state == CompanionFSM.State.HELD:
+		_do_held(delta)
+		return
+	if _falling:
+		return
 	position.y = _ground_y
 	if fsm.current_state == CompanionFSM.State.WALK:
 		_do_walk(delta)
@@ -166,23 +187,45 @@ func _on_state_entered(state: int) -> void:
 			_play_walk_anim()
 		CompanionFSM.State.SLEEP:
 			sprite.play("sleep")
+		CompanionFSM.State.HELD:
+			sprite.play("react")
 
 func _input(event: InputEvent) -> void:
 	if _entering:
 		return
-	if event is InputEventMouseButton and event.pressed:
-		if position.distance_to(get_viewport().get_mouse_position()) < MOUSE_NEAR_DISTANCE:
-			if fsm.current_state == CompanionFSM.State.SLEEP:
-				emotion.wake_up()
-				fsm.transition_to(CompanionFSM.State.IDLE)
-				return
-			if event.button_index == MOUSE_BUTTON_LEFT:
-				emotion.on_click()
-				EventBus.companion_clicked.emit()
-				_do_bounce()
-			elif event.button_index == MOUSE_BUTTON_RIGHT:
+	if event is InputEventMouseButton:
+		var mouse := get_viewport().get_mouse_position()
+		if event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			if not _falling and position.distance_to(mouse) < MOUSE_NEAR_DISTANCE:
+				_pressed_on_companion = true
+				_press_pos = mouse
+		elif event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+			if position.distance_to(mouse) < MOUSE_NEAR_DISTANCE:
+				if fsm.current_state == CompanionFSM.State.SLEEP:
+					emotion.wake_up()
+					fsm.transition_to(CompanionFSM.State.IDLE)
+					return
 				_context_menu.position = DisplayServer.mouse_get_position()
 				_context_menu.popup()
+		elif not event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			if fsm.current_state == CompanionFSM.State.HELD:
+				_end_drag()
+			elif _pressed_on_companion:
+				_on_companion_click()
+			_pressed_on_companion = false
+	elif event is InputEventMouseMotion and _pressed_on_companion \
+			and fsm.current_state != CompanionFSM.State.HELD:
+		if _press_pos.distance_to(get_viewport().get_mouse_position()) > DRAG_THRESHOLD:
+			_start_drag()
+
+func _on_companion_click() -> void:
+	if fsm.current_state == CompanionFSM.State.SLEEP:
+		emotion.wake_up()
+		fsm.transition_to(CompanionFSM.State.IDLE)
+		return
+	emotion.on_click()
+	EventBus.companion_clicked.emit()
+	_do_bounce()
 
 func _on_context_menu_pressed(id: int) -> void:
 	match id:
@@ -284,6 +327,73 @@ func _do_bounce() -> void:
 	tween.tween_property(sprite, "position:y", -10.0, 0.1)
 	tween.tween_property(sprite, "position:y", 0.0, 0.18)
 
+# --- Drag (집어 옮기기) ---
+
+func _start_drag() -> void:
+	if fsm.current_state == CompanionFSM.State.SLEEP:
+		emotion.wake_up()
+	_falling = false
+	_drag_offset = position - get_viewport().get_mouse_position()
+	fsm.transition_to(CompanionFSM.State.HELD)
+
+func _do_held(delta: float) -> void:
+	var target := get_viewport().get_mouse_position() + _drag_offset
+	target.x = clampf(target.x, SPRITE_HALF.x, _screen_rect.size.x - SPRITE_HALF.x)
+	target.y = clampf(target.y, SPRITE_HALF.y, _ground_y)
+	var dx := target.x - position.x
+	position = target
+	# 이동 반대 방향으로 매달려 흔들리는 느낌
+	sprite.rotation = lerpf(sprite.rotation, clampf(-dx * 0.06, -0.45, 0.45), 8.0 * delta)
+
+func _end_drag() -> void:
+	_falling = true
+	fsm.transition_to(CompanionFSM.State.IDLE)
+	var fall_h := maxf(_ground_y - position.y, 0.0)
+	var dur := clampf(sqrt(fall_h / 980.0) * 1.4, 0.12, 0.7)
+	var tween := create_tween()
+	tween.tween_property(self, "position:y", _ground_y, dur) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_callback(_on_land)
+
+func _on_land() -> void:
+	_falling = false
+	var tween := create_tween()
+	tween.tween_property(sprite, "scale", SPRITE_SCALE * Vector2(1.22, 0.78), 0.1)
+	tween.tween_property(sprite, "scale", SPRITE_SCALE, 0.16)
+
+# --- Away detection (자리비움 감지) ---
+
+func _process_away(delta: float) -> void:
+	_away_check_accum += delta
+	if _away_check_accum < 1.0:
+		return
+	_away_check_accum = 0.0
+
+	var mouse := Vector2(DisplayServer.mouse_get_position())
+	if _last_global_mouse == Vector2.INF:
+		_last_global_mouse = mouse
+		return
+
+	if mouse.distance_to(_last_global_mouse) > 2.0:
+		_last_global_mouse = mouse
+		if _away_seconds >= REUNION_SECONDS and not _chat_locked:
+			EventBus.user_returned.emit(_away_seconds)
+		if _away_sleeping:
+			_away_sleeping = false
+			emotion.wake_up()
+			fsm.transition_to(CompanionFSM.State.IDLE)
+		_away_seconds = 0.0
+		return
+
+	# 채팅 중이거나 키보드 사용 중일 수 있으므로 채팅 열림 상태에선 세지 않음
+	if EventBus.chat_input_open or _chat_locked:
+		return
+	_away_seconds += 1.0
+	if _away_seconds >= AWAY_SLEEP_SECONDS and not _away_sleeping \
+			and fsm.current_state != CompanionFSM.State.HELD:
+		_away_sleeping = true
+		fsm.transition_to(CompanionFSM.State.SLEEP)
+
 func _process_emotion_icons(delta: float) -> void:
 	if _entering:
 		return
@@ -321,6 +431,8 @@ func _spawn_emotion_icon(text: String, color: Color) -> void:
 	get_tree().create_timer(2.8).timeout.connect(label.queue_free)
 
 func _update_edge_lean(delta: float) -> void:
+	if fsm.current_state == CompanionFSM.State.HELD:
+		return
 	var target_rotation := 0.0
 	if fsm.current_state == CompanionFSM.State.IDLE:
 		if position.x < EDGE_LEAN_THRESHOLD:

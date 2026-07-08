@@ -73,6 +73,7 @@ func _ready() -> void:
 	_load_affinity()
 	_setup_diary()
 	EventBus.companion_clicked.connect(_on_companion_clicked)
+	EventBus.user_returned.connect(_on_user_returned)
 	_setup_screen_awareness()
 
 func _exit_tree() -> void:
@@ -166,6 +167,18 @@ func _send_to_ollama(user_msg: String) -> void:
 	_got_first_token = false
 	_show_thinking()
 	var messages := _memory.build_messages(_build_full_prompt())
+	_start_stream(messages)
+
+func _on_user_returned(away_seconds: float) -> void:
+	if _waiting or _stream_phase != StreamPhase.IDLE or _bubble.visible or _input_row.visible:
+		return
+	_waiting = true
+	_got_first_token = false
+	_show_thinking()
+	var full_prompt := _build_full_prompt()
+	full_prompt += "\n\n[사용자가 자리를 비웠다가 약 %d분 만에 돌아왔어. 반갑게 맞아줘. 짧게 1문장으로.]" \
+		% int(away_seconds / 60.0)
+	var messages := _memory.build_messages(full_prompt)
 	_start_stream(messages)
 
 func _send_proactive_message() -> void:
