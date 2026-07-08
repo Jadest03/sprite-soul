@@ -31,6 +31,8 @@ func _ready() -> void:
 	resized.connect(queue_redraw)
 
 func set_tail_x(tx: float) -> void:
+	if is_equal_approx(tx, _tail_x):
+		return
 	_tail_x = tx
 	queue_redraw()
 

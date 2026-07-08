@@ -6,6 +6,7 @@ signal quit_requested
 const CompanionFSM = preload("res://scripts/CompanionFSM.gd")
 const EmotionState = preload("res://scripts/EmotionState.gd")
 const BehaviorSelector = preload("res://scripts/BehaviorSelector.gd")
+const PIXEL_FONT = preload("res://assets/fonts/PixelifySans-Regular.ttf")
 
 const WALK_SPEED = 60.0
 const MOUSE_NEAR_DISTANCE = 80.0
@@ -111,7 +112,8 @@ func _process(delta: float) -> void:
 
 func _update_passthrough() -> void:
 	var chat_open := EventBus.chat_input_open
-	if chat_open == _prev_chat_open and position.distance_squared_to(_prev_passthrough_pos) < 1.0:
+	# 폴리곤에 8px 여유가 있어 2px 미만 이동은 갱신 불필요
+	if chat_open == _prev_chat_open and position.distance_squared_to(_prev_passthrough_pos) < 4.0:
 		return
 	_prev_chat_open = chat_open
 	_prev_passthrough_pos = position
@@ -301,9 +303,8 @@ func _process_emotion_icons(delta: float) -> void:
 func _spawn_emotion_icon(text: String, color: Color) -> void:
 	var label := Label.new()
 	label.text = text
-	var font := load("res://assets/fonts/PixelifySans-Regular.ttf")
-	if font:
-		label.add_theme_font_override("font", font)
+	if PIXEL_FONT:
+		label.add_theme_font_override("font", PIXEL_FONT)
 	label.add_theme_font_size_override("font_size", 36)
 	label.add_theme_color_override("font_color", color)
 	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.5))

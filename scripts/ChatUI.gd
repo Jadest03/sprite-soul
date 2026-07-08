@@ -57,6 +57,7 @@ var _screen_context := ""
 var _screen_http: HTTPRequest
 var _screen_timer: Timer
 var _screen_analyzing := false
+var _capture_thread: Thread
 var _last_proactive := ""
 var _last_screen_context := ""
 var _screen_perm_warned := false
@@ -73,6 +74,10 @@ func _ready() -> void:
 	_setup_diary()
 	EventBus.companion_clicked.connect(_on_companion_clicked)
 	_setup_screen_awareness()
+
+func _exit_tree() -> void:
+	if _capture_thread:
+		_capture_thread.wait_to_finish()
 
 func _process(delta: float) -> void:
 	if companion and _bubble.visible:
@@ -427,32 +432,46 @@ func _capture_and_analyze() -> void:
 	var is_sleeping: bool = companion != null and companion.fsm.current_state == CompanionFSM.State.SLEEP
 	if _screen_analyzing or _waiting or _is_typing or is_sleeping:
 		return
+	_screen_analyzing = true
+	if _capture_thread:
+		_capture_thread.wait_to_finish()
+	_capture_thread = Thread.new()
+	_capture_thread.start(_capture_in_thread)
+
+# sc_helper 실행/sips 리사이즈/base64 인코딩은 블로킹이라 스레드에서 수행
+func _capture_in_thread() -> void:
 	var path := "/tmp/sprite_soul_screen.png"
 	var helper := OS.get_executable_path().get_base_dir().path_join("sc_helper")
 	var code := OS.execute(helper, [path], [])
 	if code == 2:
-		_screen_timer.stop()
-		if not _screen_perm_warned:
-			_screen_perm_warned = true
-			get_tree().create_timer(0.5).timeout.connect(func():
-				var msg := "화면 기록 권한이 없어요! 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록에서 SpriteSoul을 허용 후 재시작해주세요."
-				show_response(msg)
-				EventBus.chat_response_received.emit(msg))
+		call_deferred("_on_capture_no_permission")
 		return
 	if code != 0 or not FileAccess.file_exists(path):
+		call_deferred("_on_capture_failed")
 		return
 	OS.execute("/usr/bin/sips", ["-Z", "1280", path])
-	_analyze_screen(path)
-
-func _analyze_screen(path: String) -> void:
-	_screen_analyzing = true
 	var file := FileAccess.open(path, FileAccess.READ)
 	if not file:
-		_screen_analyzing = false
+		call_deferred("_on_capture_failed")
 		return
 	var b64 := Marshalls.raw_to_base64(file.get_buffer(file.get_length()))
 	file.close()
+	call_deferred("_analyze_screen", b64)
 
+func _on_capture_no_permission() -> void:
+	_screen_analyzing = false
+	_screen_timer.stop()
+	if not _screen_perm_warned:
+		_screen_perm_warned = true
+		get_tree().create_timer(0.5).timeout.connect(func():
+			var msg := "화면 기록 권한이 없어요! 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록에서 SpriteSoul을 허용 후 재시작해주세요."
+			show_response(msg)
+			EventBus.chat_response_received.emit(msg))
+
+func _on_capture_failed() -> void:
+	_screen_analyzing = false
+
+func _analyze_screen(b64: String) -> void:
 	var persona_name: String = PersonaGenerator.load_persona().get("name", "나")
 	var prompt := (
 		"Look at this screenshot and answer in Korean with exactly this format:\n"
