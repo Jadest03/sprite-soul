@@ -32,10 +32,13 @@ var _preview_textures: Dictionary = {}
 var _anim_btns: Dictionary = {}
 
 var _pixel_font: Font
+var _ollama_pid: int = -1        # 우리가 직접 띄운 ollama serve CLI의 PID
+var _ollama_app_started := false # 우리가 Ollama.app을 띄웠는지
 
 func _ready() -> void:
 	_pixel_font = load("res://assets/fonts/PixelifySans-Regular.ttf")
 	get_tree().set_auto_accept_quit(false)
+	_ensure_ollama_running()
 	if PersonaGenerator.has_saved_persona():
 		_setup_companion_window()
 		_launch_companion()
@@ -45,8 +48,32 @@ func _ready() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
-		_unload_ollama_model()
+		_shutdown_ollama()
 		get_tree().quit()
+
+func _ensure_ollama_running() -> void:
+	# 이미 떠 있는 서버(사용자가 직접 켠 것)는 그대로 쓰고 종료 시 건드리지 않음
+	var code := OS.execute("/usr/bin/curl",
+		["-s", "-o", "/dev/null", "--max-time", "1", "http://localhost:11434/api/tags"])
+	if code == 0:
+		return
+	# Ollama.app 우선 (Metal GPU 지원), 없으면 CLI 폴백
+	if FileAccess.file_exists("/Applications/Ollama.app/Contents/MacOS/Ollama"):
+		OS.create_process("/usr/bin/open", ["-ga", "Ollama"])
+		_ollama_app_started = true
+		return
+	for path in ["/opt/homebrew/bin/ollama", "/usr/local/bin/ollama"]:
+		if FileAccess.file_exists(path):
+			_ollama_pid = OS.create_process(path, ["serve"])
+			return
+
+func _shutdown_ollama() -> void:
+	if _ollama_app_started:
+		OS.execute("/usr/bin/osascript", ["-e", 'quit app "Ollama"'])
+	elif _ollama_pid > 0:
+		OS.kill(_ollama_pid)
+	else:
+		_unload_ollama_model()
 
 func _unload_ollama_model() -> void:
 	var body := '{"model":"gemma4:12b-it-q4_K_M","messages":[],"keep_alive":0}'
@@ -363,7 +390,7 @@ func _launch_companion() -> void:
 	chat_ui.companion = companion
 
 func _on_quit_requested() -> void:
-	_unload_ollama_model()
+	_shutdown_ollama()
 	get_tree().quit()
 
 func _on_reset_requested() -> void:
