@@ -2,6 +2,7 @@ extends Node
 
 # Companion behavior signals
 signal companion_clicked
+signal user_returned(away_seconds: float)
 
 # Chat signals
 signal chat_requested(message: String)
