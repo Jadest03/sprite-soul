@@ -135,6 +135,25 @@ def _filter_largest_component(rgba_img):
     return Image.fromarray(out, "RGBA")
 
 
+def clean_frame(img, light_min=160, max_depth=4):
+    """다운샘플 후 최종 프레임 실루엣 바깥에 남은 밝은 헤일로 제거.
+
+    remove_white_bg의 240 문턱을 못 넘은 안티앨리어싱 픽셀(밝기 160~240)이
+    외곽선 밖에 얇은 테로 남고, NEAREST 다운샘플로 점 덩어리가 된다.
+    투명 영역에 접한 밝은 픽셀을 한 겹씩 max_depth겹까지만 벗겨낸다.
+    모자·셔츠 등 몸통의 흰색은 어두운 외곽선 안쪽이라 투명과 접하지 않아 보존됨.
+    """
+    arr = np.array(img.convert("RGBA")).copy()
+    light = arr[:, :, :3].min(axis=2) > light_min
+    for _ in range(max_depth):
+        a = arr[:, :, 3] > 10
+        fringe = ndi.binary_dilation(~a, structure=np.ones((3, 3))) & a & light
+        if not fringe.any():
+            break
+        arr[fringe, 3] = 0
+    return Image.fromarray(arr, "RGBA")
+
+
 def _split_2x2(result, out_dir, frame_size=128, margin=8):
     """2×2 layout: 4 large poses (front / arms / back / lying)."""
     w, h = result.size
@@ -168,6 +187,7 @@ def _split_2x2(result, out_dir, frame_size=128, margin=8):
         scaled = crop.resize((nw, nh), NEAREST)
         canvas = Image.new("RGBA", (frame_size, frame_size), (0,0,0,0))
         canvas.paste(scaled, ((frame_size-nw)//2, max(0, frame_size-nh-margin)), mask=scaled)
+        canvas = clean_frame(canvas)
         frames[name] = canvas
         canvas.save(os.path.join(out_dir, f"frame_{name}.png"))
 
@@ -290,6 +310,7 @@ def split_frames(result, out_dir, frame_size=128, margin=8):
             scaled = crop.resize((nw, nh), NEAREST)
             canvas = Image.new("RGBA", (frame_size, frame_size), (0,0,0,0))
             canvas.paste(scaled, ((frame_size-nw)//2, max(0, frame_size-nh-margin)), mask=scaled)
+            canvas = clean_frame(canvas)
             frames[name] = canvas
             canvas.save(os.path.join(out_dir, f"frame_{name}.png"))
 
