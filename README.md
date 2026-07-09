@@ -102,6 +102,8 @@ Everything runs locally. No cloud, no subscriptions, no data sent anywhere.
   - Click to wake up and boost energy
 - **Emotion floating icons** — floating `z` (purple) when tired, `...` (yellow) when bored; appear above the companion's head and drift upward
 - **Micro-interactions** — random yawning stretch, "banzai" pose, breathing animation, edge leaning
+- **Pick up & drag** — grab the companion and carry it anywhere; it dangles against the movement, then falls with gravity and lands with a squash
+- **Away detection** — falls asleep after 5 minutes without mouse movement; if you were away 15+ minutes, it wakes up and greets you when you return
 - **Mouse-reactive** — companion locks to IDLE while you chat
 - **Entrance animation** — pops in with a banzai pose and flash effect on every launch
 - **Click-through overlay** — transparent areas pass mouse events to windows below; only the sprite and speech bubble are interactive
@@ -190,7 +192,7 @@ Sprite generation uses `black-forest-labs/FLUX.2-klein-base-4B`. A free HuggingF
 
 ### Option A: Download the pre-built app (recommended)
 
-1. Download `SpriteSoul-app.zip` from the [latest release](https://github.com/Jadest03/sprite-soul/releases/latest)
+1. Download `SpriteSoul-vX.Y.Z-macos.zip` from the [latest release](https://github.com/Jadest03/sprite-soul/releases/latest)
 2. Unzip and move `SpriteSoul.app` to your Applications folder
 3. Complete the [Prerequisites](#prerequisites) (Ollama + Python environment)
 4. Launch `SpriteSoul.app`
@@ -253,6 +255,7 @@ After generation, a preview screen shows idle/walk/sleep animations. Click **이
 |--------|--------|
 | Left-click | Open chat input (companion bounces) |
 | Left-click (while input open) | Close input |
+| Drag | Pick up and carry the companion |
 | Right-click | Context menu (reset / quit) |
 | Click while sleeping | Wake up |
 | ESC | Close chat input |
