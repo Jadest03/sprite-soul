@@ -6,4 +6,3 @@
 script = ExtResource("1_companion")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-scale = Vector2(5, 5)

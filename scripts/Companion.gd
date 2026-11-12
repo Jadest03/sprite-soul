@@ -15,17 +15,8 @@ const DRAG_THRESHOLD = 10.0        # px 이상 움직이면 클릭이 아니라 
 const AWAY_SLEEP_SECONDS = 300.0   # 마우스가 이 시간 동안 멈추면 잠듦
 const REUNION_SECONDS = 900.0      # 이 시간 이상 자리 비운 뒤 돌아오면 인사
 
-# 실제 스프라이트 vs placeholder에 따라 _ready에서 결정
-var SPRITE_SCALE := Vector2(5.0, 5.0)
-var SPRITE_HALF  := Vector2(40.0, 50.0)
-
-const STATE_COLORS = {
-	"idle":   Color(1.0, 0.85, 0.2),
-	"walk_l": Color(0.3, 0.6, 1.0),
-	"walk_r": Color(0.3, 0.6, 1.0),
-	"sleep":  Color(0.5, 0.3, 0.8),
-	"react":  Color(1.0, 0.5, 0.1),
-}
+const SPRITE_SCALE := Vector2(1.0, 1.0)
+const SPRITE_HALF  := Vector2(48.0, 65.0)
 
 var fsm
 var emotion
@@ -85,17 +76,10 @@ func _ready() -> void:
 
 	_screen_rect = Rect2(Vector2.ZERO, get_viewport_rect().size)
 
-	var loaded := _load_sprite_frames()
-	if loaded != null:
-		sprite.sprite_frames = loaded
-		SPRITE_SCALE = Vector2(1.0, 1.0)
-		SPRITE_HALF  = Vector2(48.0, 65.0)
-		_walk_scale_mult = _measure_walk_scale_correction()
-	else:
-		sprite.sprite_frames = _build_placeholder_frames()
+	sprite.sprite_frames = _load_sprite_frames()
+	_walk_scale_mult = _measure_walk_scale_correction()
 	sprite.scale = SPRITE_SCALE
 
-	# SPRITE_HALF 확정 후 위치 계산
 	_ground_y = _screen_rect.size.y - SPRITE_HALF.y - 55
 	position = Vector2(_screen_rect.size.x * 0.5, _ground_y)
 	_pick_walk_direction()
@@ -529,45 +513,3 @@ func _load_sprite_frames() -> SpriteFrames:
 				frames.add_frame("walk_l", ImageTexture.create_from_image(img_l))
 
 	return frames
-
-# --- Placeholder sprite generation ---
-
-func _build_placeholder_frames() -> SpriteFrames:
-	var frames := SpriteFrames.new()
-	frames.remove_animation("default")
-
-	for anim_name in STATE_COLORS:
-		var color: Color = STATE_COLORS[anim_name]
-		frames.add_animation(anim_name)
-		frames.set_animation_loop(anim_name, true)
-		frames.set_animation_speed(anim_name, 4.0)
-		frames.add_frame(anim_name, _make_character_frame(color, false))
-		frames.add_frame(anim_name, _make_character_frame(color, true))
-
-	return frames
-
-func _make_character_frame(color: Color, blink: bool) -> ImageTexture:
-	var img := Image.create(16, 20, false, Image.FORMAT_RGBA8)
-	var c := color.lightened(0.15) if blink else color
-	var dark := c.darkened(0.3)
-
-	_fill_rect(img, 5, 0, 6, 6, c)       # head
-	if not blink:
-		img.set_pixel(6, 2, Color.BLACK)
-		img.set_pixel(9, 2, Color.BLACK)
-	else:
-		img.set_pixel(6, 3, dark)
-		img.set_pixel(9, 3, dark)
-	_fill_rect(img, 6, 6, 4, 6, c)       # body
-	_fill_rect(img, 4, 6, 2, 5, dark)    # left arm
-	_fill_rect(img, 10, 6, 2, 5, dark)   # right arm
-	_fill_rect(img, 6, 12, 2, 5, dark)   # left leg
-	_fill_rect(img, 9, 12, 2, 5, dark)   # right leg
-
-	return ImageTexture.create_from_image(img)
-
-func _fill_rect(img: Image, x: int, y: int, w: int, h: int, color: Color) -> void:
-	for px in range(x, x + w):
-		for py in range(y, y + h):
-			if px < img.get_width() and py < img.get_height():
-				img.set_pixel(px, py, color)
