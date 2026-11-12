@@ -11,6 +11,8 @@ const BUBBLE_HIDE_DELAY := 5.0
 const TYPING_INTERVAL := 0.03
 const OLLAMA_URL := "http://localhost:11434/api/chat"
 const OLLAMA_MODEL := "gemma4:12b-it-q4_K_M"
+# 요청마다 num_ctx가 다르면 Ollama가 매번 모델을 다시 올리므로 (3~4초) 모든 요청에 같은 값을 쓴다
+const OLLAMA_NUM_CTX := 4096
 const SCREEN_INTERVAL := 60.0
 const PROACTIVE_CHANCE := 0.35
 const BOREDOM_PROACTIVE_INTERVAL := 300.0
@@ -197,7 +199,7 @@ func _start_stream(messages: Array) -> void:
 		"stream": true,
 		"think": false,
 		"keep_alive": "2m",
-		"options": {"num_ctx": 8192, "num_predict": 150, "temperature": 0.9}
+		"options": {"num_ctx": OLLAMA_NUM_CTX, "num_predict": 150, "temperature": 0.9}
 	})
 	_pending_body = body
 	_stream_accumulator = ""
@@ -380,7 +382,7 @@ func _request_diary_summary(date: String) -> bool:
 		"messages": [{"role": "user", "content": prompt}],
 		"stream": false,
 		"think": false,
-		"options": {"num_ctx": 4096, "num_predict": 60, "temperature": 0.5}
+		"options": {"num_ctx": OLLAMA_NUM_CTX, "num_predict": 60, "temperature": 0.5}
 	})
 	_diary_http.request(OLLAMA_URL, ["Content-Type: application/json"], HTTPClient.METHOD_POST, body)
 	return true
@@ -512,7 +514,7 @@ func _analyze_screen(b64: String) -> void:
 		"stream": false,
 		"think": false,
 		"keep_alive": "2m",
-		"options": {"num_ctx": 4096, "num_predict": 80, "temperature": 0.7}
+		"options": {"num_ctx": OLLAMA_NUM_CTX, "num_predict": 80, "temperature": 0.7}
 	})
 	var err := _screen_http.request(OLLAMA_URL, ["Content-Type: application/json"], HTTPClient.METHOD_POST, body)
 	if err != OK:
