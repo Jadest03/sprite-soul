@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="SpriteSoul"
-config/version="0.1.0"
+config/version="1.3.0"
 run/main_scene="res://scenes/Main.tscn"
 run/max_fps=30
 config/features=PackedStringArray("4.6", "GL Compatibility")
@@ -24,7 +24,7 @@ EventBus="*res://autoloads/EventBus.gd"
 [display]
 
 window/size/viewport_width=300
-window/size/viewport_height=200
+window/size/viewport_height=330
 window/size/borderless=true
 window/size/always_on_top=true
 window/size/transparent=true

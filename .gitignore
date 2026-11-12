@@ -1,8 +1,4 @@
-data_gen/*.jsonl
 __pycache__/
-colab/
-*.gguf
-Modelfile
 .godot/
 *.uid
 sprite_gen/.venv/
