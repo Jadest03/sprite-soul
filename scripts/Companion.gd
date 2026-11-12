@@ -57,7 +57,7 @@ var _falling := false
 
 var _away_check_accum := 0.0
 var _last_global_mouse := Vector2.INF
-var _away_seconds := 0.0
+var _last_active_unix := 0.0  # 마지막으로 사용자가 있었던 시각 (맥 잠자기 중에도 흐르는 벽시계 기준)
 var _away_sleeping := false
 
 @onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
@@ -369,27 +369,30 @@ func _process_away(delta: float) -> void:
 		return
 	_away_check_accum = 0.0
 
+	var now := Time.get_unix_time_from_system()
 	var mouse := Vector2(DisplayServer.mouse_get_position())
 	if _last_global_mouse == Vector2.INF:
 		_last_global_mouse = mouse
+		_last_active_unix = now
 		return
 
+	var away_seconds := now - _last_active_unix
 	if mouse.distance_to(_last_global_mouse) > 2.0:
 		_last_global_mouse = mouse
-		if _away_seconds >= REUNION_SECONDS and not _chat_locked:
-			EventBus.user_returned.emit(_away_seconds)
+		_last_active_unix = now
+		if away_seconds >= REUNION_SECONDS and not _chat_locked:
+			EventBus.user_returned.emit(away_seconds)
 		if _away_sleeping:
 			_away_sleeping = false
 			emotion.wake_up()
 			fsm.transition_to(CompanionFSM.State.IDLE)
-		_away_seconds = 0.0
 		return
 
 	# 채팅 중이거나 키보드 사용 중일 수 있으므로 채팅 열림 상태에선 세지 않음
 	if EventBus.chat_input_open or _chat_locked:
+		_last_active_unix = now
 		return
-	_away_seconds += 1.0
-	if _away_seconds >= AWAY_SLEEP_SECONDS and not _away_sleeping \
+	if away_seconds >= AWAY_SLEEP_SECONDS and not _away_sleeping \
 			and fsm.current_state != CompanionFSM.State.HELD:
 		_away_sleeping = true
 		fsm.transition_to(CompanionFSM.State.SLEEP)
