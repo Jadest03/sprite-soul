@@ -107,10 +107,10 @@ func _process(delta: float) -> void:
 	if _entering:
 		return
 
-	emotion.tick(delta)
+	emotion.tick(delta, fsm.current_state == CompanionFSM.State.SLEEP)
 	fsm.tick(delta)
 
-	if not _chat_locked and not _falling and not _away_sleeping \
+	if not _chat_locked and not EventBus.chat_input_open and not _falling and not _away_sleeping \
 			and fsm.current_state != CompanionFSM.State.HELD:
 		var next: int = behavior.select(fsm, emotion)
 		if next != fsm.current_state:
@@ -224,6 +224,7 @@ func _on_companion_click() -> void:
 		fsm.transition_to(CompanionFSM.State.IDLE)
 		return
 	emotion.on_click()
+	fsm.transition_to(CompanionFSM.State.IDLE)  # 말 거는 동안 멈춰 서 있기
 	EventBus.companion_clicked.emit()
 	_do_bounce()
 
@@ -260,8 +261,8 @@ func _play_walk_anim() -> void:
 # --- Micro-interactions ---
 
 func _process_idle_micro(delta: float) -> void:
-	if fsm.current_state != CompanionFSM.State.IDLE:
-		_idle_micro_timer = 0.0
+	# IDLE은 최대 8초라 연속 시간이 아니라 누적 IDLE 시간으로 센다
+	if fsm.current_state != CompanionFSM.State.IDLE or _chat_locked:
 		return
 	_idle_micro_timer += delta
 	if _idle_micro_timer >= _next_idle_micro:
@@ -271,7 +272,6 @@ func _process_idle_micro(delta: float) -> void:
 
 func _process_banzai_micro(delta: float) -> void:
 	if fsm.current_state != CompanionFSM.State.IDLE or _chat_locked:
-		_banzai_timer = 0.0
 		return
 	_banzai_timer += delta
 	if _banzai_timer >= _next_banzai:
