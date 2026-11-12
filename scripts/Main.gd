@@ -69,7 +69,8 @@ func _ensure_ollama_running() -> void:
 
 func _shutdown_ollama() -> void:
 	if _ollama_app_started:
-		OS.execute("/usr/bin/osascript", ["-e", 'quit app "Ollama"'])
+		# AppleScript quit은 Ollama가 거부(-128)해서 프로세스를 직접 종료 (서버·모델도 함께 내려감)
+		OS.execute("/usr/bin/pkill", ["-x", "Ollama"])
 	elif _ollama_pid > 0:
 		OS.kill(_ollama_pid)
 	else:
@@ -77,7 +78,7 @@ func _shutdown_ollama() -> void:
 
 func _unload_ollama_model() -> void:
 	var body := '{"model":"gemma4:12b-it-q4_K_M","messages":[],"keep_alive":0}'
-	OS.execute("/usr/bin/curl", ["-s", "-X", "POST", "http://localhost:11434/api/chat",
+	OS.execute("/usr/bin/curl", ["-s", "--max-time", "2", "-X", "POST", "http://localhost:11434/api/chat",
 		"-H", "Content-Type: application/json", "-d", body])
 
 # --- Setup mode ---
