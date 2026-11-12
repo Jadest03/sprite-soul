@@ -22,12 +22,14 @@ func select(fsm, emotion) -> int:
 			return CompanionFSM.State.IDLE
 		return current
 
+	# 확률은 초당 기준 (프레임마다 굴리면 주사율에 따라 행동이 달라짐). 값은 기존 120Hz 화면에서의 체감과 동일
+	var dt := get_process_delta_time()
 	if current == CompanionFSM.State.IDLE and t > MIN_IDLE_DURATION:
-		if emotion.is_bored() or randf() < 0.002 or t > MAX_IDLE_DURATION:
+		if emotion.is_bored() or randf() < 0.24 * dt or t > MAX_IDLE_DURATION:
 			return CompanionFSM.State.WALK
 
 	if current == CompanionFSM.State.WALK and t > MIN_WALK_DURATION:
-		if randf() < 0.01 or t > MAX_WALK_DURATION:
+		if randf() < 1.2 * dt or t > MAX_WALK_DURATION:
 			return CompanionFSM.State.IDLE
 
 	return current
