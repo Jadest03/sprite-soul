@@ -5,6 +5,7 @@ const ChatUIScene       = preload("res://scenes/ChatUI.tscn")
 const PersonaSetupScene = preload("res://scenes/PersonaSetup.tscn")
 const PersonaGenerator  = preload("res://scripts/PersonaGenerator.gd")
 const SpriteGenerator   = preload("res://scripts/SpriteGenerator.gd")
+const ChatUI            = preload("res://scripts/ChatUI.gd")
 
 const COMPANION_AREA := Vector2i(300, 330)
 const SETUP_AREA     := Vector2i(820, 1100)
@@ -77,7 +78,7 @@ func _shutdown_ollama() -> void:
 		_unload_ollama_model()
 
 func _unload_ollama_model() -> void:
-	var body := '{"model":"gemma4:12b-it-q4_K_M","messages":[],"keep_alive":0}'
+	var body := JSON.stringify({"model": ChatUI.OLLAMA_MODEL, "messages": [], "keep_alive": 0})
 	OS.execute("/usr/bin/curl", ["-s", "--max-time", "2", "-X", "POST", "http://localhost:11434/api/chat",
 		"-H", "Content-Type: application/json", "-d", body])
 
