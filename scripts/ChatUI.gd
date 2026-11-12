@@ -221,21 +221,22 @@ func _poll_stream() -> void:
 				_stream_phase = StreamPhase.IDLE
 				_on_ollama_error()
 		StreamPhase.SENDING:
-			if status == HTTPClient.STATUS_BODY:
+			if status == HTTPClient.STATUS_REQUESTING:
+				return
+			if status == HTTPClient.STATUS_BODY and _http_client.get_response_code() == 200:
 				_stream_phase = StreamPhase.READING
-			elif status in [HTTPClient.STATUS_CONNECTION_ERROR,
-					HTTPClient.STATUS_CANT_CONNECT, HTTPClient.STATUS_CANT_RESOLVE]:
-				_stream_phase = StreamPhase.IDLE
+			elif status == HTTPClient.STATUS_BODY and _http_client.get_response_code() == 404:
+				_on_ollama_error("(모델 없음: ollama pull %s)" % OLLAMA_MODEL)
+			else:
 				_on_ollama_error()
 		StreamPhase.READING:
 			if status == HTTPClient.STATUS_BODY:
 				var chunk := _http_client.read_response_body_chunk()
 				if chunk.size() > 0:
 					_parse_stream_chunk(chunk.get_string_from_utf8())
-			elif status == HTTPClient.STATUS_DISCONNECTED:
-				_stream_phase = StreamPhase.IDLE
-				if _waiting:
-					_on_ollama_error()
+			else:
+				# done 없이 스트림이 끝남
+				_on_ollama_error()
 
 func _parse_stream_chunk(text: String) -> void:
 	_stream_accumulator += text
@@ -260,10 +261,10 @@ func _parse_stream_chunk(text: String) -> void:
 		if done:
 			_stream_phase = StreamPhase.IDLE
 			_waiting = false
-			if not _full_text.is_empty():
+			if _got_first_token:
 				_memory.add("assistant", _full_text)
 				EventBus.chat_response_received.emit(_full_text)
-				_hide_timer = _hide_delay()
+			_hide_timer = _hide_delay()
 
 func _build_full_prompt() -> String:
 	var p := _system_prompt + _profile.to_prompt_fragment() + _affinity_fragment()
@@ -316,6 +317,12 @@ func _setup_diary() -> void:
 	_load_diary()
 	_build_diary_context()
 	get_tree().create_timer(2.0).timeout.connect(_check_new_day)
+	# 며칠씩 켜둬도 날짜가 바뀌면 일기를 쓰도록 주기적으로 확인 (요약 실패 시 재시도 겸용)
+	var day_timer := Timer.new()
+	day_timer.wait_time = 3600.0
+	day_timer.autostart = true
+	day_timer.timeout.connect(_check_new_day)
+	add_child(day_timer)
 
 func _load_diary() -> void:
 	if not FileAccess.file_exists(_DIARY_PATH):
@@ -345,17 +352,23 @@ func _check_new_day() -> void:
 		if f:
 			last = f.get_as_text().strip_edges()
 			f.close()
+	if last == today:
+		return
+	# 요약을 요청했으면 성공한 뒤에 날짜를 넘긴다 (실패하면 다음 확인 때 재시도)
+	if last.is_empty() or not _request_diary_summary(last):
+		_save_last_date(today)
+
+func _save_last_date(date: String) -> void:
 	var fw := FileAccess.open(_LAST_DATE_PATH, FileAccess.WRITE)
 	if fw:
-		fw.store_string(today)
+		fw.store_string(date)
 		fw.close()
-	if not last.is_empty() and last != today:
-		_request_diary_summary(last)
 
-func _request_diary_summary(date: String) -> void:
+# 요약할 대화가 없으면 false
+func _request_diary_summary(date: String) -> bool:
 	var history := _memory.get_persistent()
 	if history.size() < 2:
-		return
+		return false
 	_pending_diary_date = date
 	var history_text := ""
 	for msg in history:
@@ -370,6 +383,7 @@ func _request_diary_summary(date: String) -> void:
 		"options": {"num_ctx": 4096, "num_predict": 60, "temperature": 0.5}
 	})
 	_diary_http.request(OLLAMA_URL, ["Content-Type: application/json"], HTTPClient.METHOD_POST, body)
+	return true
 
 func _on_diary_summarized(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	if code != 200:
@@ -387,6 +401,7 @@ func _on_diary_summarized(_result: int, code: int, _headers: PackedStringArray, 
 	if f:
 		f.store_string(JSON.stringify(_diary_entries))
 		f.close()
+	_save_last_date(Time.get_date_string_from_system())
 	_build_diary_context()
 
 func _check_boredom_proactive() -> void:
@@ -403,11 +418,10 @@ func _check_boredom_proactive() -> void:
 	_send_proactive_message()
 
 func _try_extract_name(text: String) -> void:
-	# "내 이름은 X야", "나는 X야", "X라고 불러줘" 패턴 감지
+	# "내 이름은 X야/이야/예요/이에요" 패턴 감지
+	# ("나는 X야"는 "나는 개발자야" 같은 말까지 이름으로 잡아서 제외)
 	var patterns := [
-		["내 이름은 ", ["야", "이야", "이에요", "예요"]],
-		["저는 ", ["이에요", "예요", "이야", "야"]],
-		["나는 ", ["야", "이야"]],
+		["내 이름은 ", ["이에요", "예요", "이야", "야"]],
 	]
 	for pair in patterns:
 		var prefix: String = pair[0]
@@ -540,11 +554,11 @@ func _show_thinking() -> void:
 		_update_bubble_position()
 	_bubble.show()
 
-func _on_ollama_error() -> void:
+func _on_ollama_error(msg: String = "(연결 안 됨)") -> void:
 	_waiting = false
 	_stream_phase = StreamPhase.IDLE
-	show_response("(연결 안 됨)")
-	EventBus.chat_response_received.emit("(연결 안 됨)")
+	show_response(msg)
+	EventBus.chat_response_received.emit(msg)
 
 func _set_input_visible(visible: bool) -> void:
 	EventBus.chat_input_open = visible
