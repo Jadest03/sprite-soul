@@ -91,7 +91,7 @@ func _process(delta: float) -> void:
 			_psb.set_text(_full_text.substr(0, _displayed_chars))
 			if _displayed_chars >= _full_text.length():
 				_is_typing = false
-				_hide_timer = BUBBLE_HIDE_DELAY
+				_hide_timer = _hide_delay()
 			else:
 				_typing_timer = TYPING_INTERVAL
 
@@ -263,7 +263,7 @@ func _parse_stream_chunk(text: String) -> void:
 			if not _full_text.is_empty():
 				_memory.add("assistant", _full_text)
 				EventBus.chat_response_received.emit(_full_text)
-				_hide_timer = BUBBLE_HIDE_DELAY
+				_hide_timer = _hide_delay()
 
 func _build_full_prompt() -> String:
 	var p := _system_prompt + _profile.to_prompt_fragment() + _affinity_fragment()
@@ -552,7 +552,11 @@ func _set_input_visible(visible: bool) -> void:
 		_update_input_position()
 	_input_row.visible = visible
 	if not visible and _bubble.visible and not _is_typing and _hide_timer == 0.0:
-		_hide_timer = BUBBLE_HIDE_DELAY
+		_hide_timer = _hide_delay()
+
+# 긴 말은 읽을 시간을 더 준다 (글자당 0.1초, 최소 BUBBLE_HIDE_DELAY)
+func _hide_delay() -> float:
+	return maxf(BUBBLE_HIDE_DELAY, _full_text.length() * 0.1)
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
