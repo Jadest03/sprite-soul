@@ -5,6 +5,7 @@ Usage: python generate_sprites.py --reference-image ./char.png --output ./sprite
 """
 
 import argparse
+import gc
 import os
 import threading
 import time
@@ -460,8 +461,31 @@ def generate(args):
         login(token=hf_token, add_to_git_credential=False)
 
     from diffusers import DiffusionPipeline
+
+    # 1단계: 텍스트 인코더(7.5GB)만 올려 프롬프트를 임베딩으로 바꾸고 바로 내린다.
+    # 트랜스포머(7.2GB)와 동시에 메모리에 올리지 않아 최대 점유가 절반 수준으로 줄어든다.
+    prompt = build_prompt(args.appearance)
+    encoder = DiffusionPipeline.from_pretrained(
+        "black-forest-labs/FLUX.2-klein-base-4B",
+        transformer=None,
+        vae=None,
+        torch_dtype=dtype,
+    ).to(device)
+    with torch.no_grad():
+        prompt_embeds, _ = encoder.encode_prompt(prompt, device=device)
+        negative_prompt_embeds, _ = encoder.encode_prompt("", device=device)
+    del encoder
+    gc.collect()
+    if device == "mps":
+        torch.mps.empty_cache()
+    elif device == "cuda":
+        torch.cuda.empty_cache()
+
+    # 2단계: 텍스트 인코더 없이 트랜스포머 + VAE만 로드
     pipe = DiffusionPipeline.from_pretrained(
         "black-forest-labs/FLUX.2-klein-base-4B",
+        text_encoder=None,
+        tokenizer=None,
         torch_dtype=dtype,
     )
 
@@ -475,7 +499,6 @@ def generate(args):
         t.join(timeout=1)
     log("모델 로드 완료")
 
-    prompt = build_prompt(args.appearance)
     generator = torch.Generator(device).manual_seed(args.seed)
 
     def on_step_end(pipe, step, timestep, callback_kwargs):
@@ -489,7 +512,8 @@ def generate(args):
         ref_img = Image.open(args.reference_image).convert("RGB").resize((512, 512), Image.LANCZOS)
 
     result = pipe(
-        prompt=prompt,
+        prompt_embeds=prompt_embeds,
+        negative_prompt_embeds=negative_prompt_embeds,
         image=ref_img,
         num_inference_steps=steps,
         guidance_scale=5.0,
