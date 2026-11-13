@@ -97,14 +97,14 @@ Everything runs locally. No cloud, no subscriptions, no data sent anywhere.
 ### Companion Behavior
 - **FSM-based** — idle, walk, and sleep states with natural timing
 - **Emotion system** — internal energy/boredom values decay over time
-  - Low energy → falls asleep automatically
+  - Low energy → falls asleep, recovers energy while sleeping, and wakes up on its own
   - High boredom → starts walking or initiates conversation
   - Click to wake up and boost energy
 - **Emotion floating icons** — floating `z` (purple) when tired, `...` (yellow) when bored; appear above the companion's head and drift upward
 - **Micro-interactions** — random yawning stretch, "banzai" pose, breathing animation, edge leaning
 - **Pick up & drag** — grab the companion and carry it anywhere; it dangles against the movement, then falls with gravity and lands with a squash
-- **Away detection** — falls asleep after 5 minutes without mouse movement; if you were away 15+ minutes, it wakes up and greets you when you return
-- **Mouse-reactive** — companion locks to IDLE while you chat
+- **Away detection** — falls asleep after 5 minutes without mouse movement; if you were away 15+ minutes, it wakes up and greets you when you return (measured by the clock, so time your Mac spends asleep counts too)
+- **Stays put while you talk** — stops walking when clicked and stands still while the input box is open or it is replying
 - **Entrance animation** — pops in with a banzai pose and flash effect on every launch
 - **Click-through overlay** — transparent areas pass mouse events to windows below; only the sprite and speech bubble are interactive
 
@@ -112,6 +112,7 @@ Everything runs locally. No cloud, no subscriptions, no data sent anywhere.
 - Powered by Ollama (`gemma4:12b-it-q4_K_M`) running locally
 - **Streaming responses** — tokens appear in real time as the model generates them
 - Pixel speech bubble renders progressively; a `...` thinking bubble appears while connecting
+- Longer replies stay on screen longer (0.1s per character, 5s minimum)
 - Click the companion to open the input box
 - Short, casual replies — the companion is a friend, not an assistant
 - **Proactive messaging** — initiates conversation when bored (boredom > 70%, 5-minute cooldown), and comments on screen context changes (35% chance)
@@ -125,11 +126,11 @@ Everything runs locally. No cloud, no subscriptions, no data sent anywhere.
 
 ### Memory & Persona
 - Last 10 conversation turns persisted to `user://memory.json`
-- User's name extracted from natural phrases ("내 이름은 X야", "나는 X야")
+- User's name is taken from the setup screen, and updated when you say "내 이름은 X야"
 - Persona saved to `user://persona.json` — name, appearance, system prompt
 - Right-click → "새 캐릭터 만들기" to reset and create a new character
 - **Affinity system** — conversation count tracked in `user://affinity.json`; tone shifts across 4 levels (first meeting → acquaintance → close friend → old friend) injected into each prompt
-- **Daily diary** — on each new day, yesterday's conversation is summarized by the LLM into one sentence and stored in `user://diary.json`; the last 3 days are injected into the system prompt so the companion remembers past sessions
+- **Daily diary** — on each new day, yesterday's conversation is summarized by the LLM into one sentence and stored in `user://diary.json`; the last 3 days are injected into the system prompt so the companion remembers past sessions. The date is re-checked every hour, so it also works when the app stays open for days
 
 ---
 
@@ -138,8 +139,8 @@ Everything runs locally. No cloud, no subscriptions, no data sent anywhere.
 | Component | Requirement |
 |-----------|-------------|
 | OS | macOS (Apple Silicon recommended) |
-| RAM | 16GB+ unified memory (for FLUX.2 sprite generation) |
-| Disk | 25GB+ free (13GB FLUX model + 8GB LLM + generated sprites) |
+| RAM | 16GB+ unified memory (sprite generation peaks at about 14GB; the chat model keeps about 8.5GB while the companion is awake) |
+| Disk | 25GB+ free (15GB FLUX model + 8GB LLM + generated sprites) |
 | Godot | 4.6 |
 | Python | 3.10+ |
 | Ollama | Latest |
@@ -156,16 +157,14 @@ Download from [godotengine.org](https://godotengine.org/download).
 
 ### 2. Ollama + Model
 
-```bash
-# Install Ollama (official installer required — Homebrew version is missing required binaries)
-curl -fsSL https://ollama.com/install.sh | sh
+Install **Ollama.app** from [ollama.com/download](https://ollama.com/download) into `/Applications`. Use the official app — the Homebrew build is missing required binaries.
 
+```bash
 # Pull the vision-language model (7.6GB)
 ollama pull gemma4:12b-it-q4_K_M
-
-# Start the server (keep this running in the background)
-ollama serve
 ```
+
+You don't need to keep a server running: SpriteSoul starts Ollama.app on launch, and quits it again on exit if it was the one that started it.
 
 ### 3. Python Environment
 
@@ -180,7 +179,7 @@ pip install -r requirements.txt
 
 ### 4. HuggingFace Token
 
-Sprite generation uses `black-forest-labs/FLUX.2-klein-base-4B`. A free HuggingFace account and token is required to download it (~13GB on first run).
+Sprite generation uses `black-forest-labs/FLUX.2-klein-base-4B`. A free HuggingFace account and token is required to download it (~15GB on first run).
 
 1. Go to [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
 2. Create a token with **Read** permission
@@ -193,9 +192,11 @@ Sprite generation uses `black-forest-labs/FLUX.2-klein-base-4B`. A free HuggingF
 ### Option A: Download the pre-built app (recommended)
 
 1. Download `SpriteSoul-vX.Y.Z-macos.zip` from the [latest release](https://github.com/Jadest03/sprite-soul/releases/latest)
-2. Unzip and move `SpriteSoul.app` to your Applications folder
-3. Complete the [Prerequisites](#prerequisites) (Ollama + Python environment)
+2. Clone this repo and complete the [Prerequisites](#prerequisites) (Ollama + Python environment)
+3. Unzip and move `SpriteSoul.app` into the cloned `sprite-soul` folder
 4. Launch `SpriteSoul.app`
+
+> Sprite generation runs in the Python environment at `sprite_gen/.venv`. The app looks for it in the folders above itself, so it has to sit inside the cloned repo — from `/Applications` it won't find it.
 
 > On first launch, macOS may show an "unidentified developer" warning. Go to **System Settings → Privacy & Security** and click **Open Anyway**.
 
@@ -218,6 +219,8 @@ open -a Godot project.godot
 
 Then press **▶ Run** (F5) in the Godot editor.
 
+> Screen awareness is off when running from the editor — the `sc_helper` capture binary only exists in the built app. Build it with `./scripts/export_macos.sh` if you want it.
+
 ---
 
 ## First Run
@@ -231,11 +234,11 @@ The first time you launch, a setup screen appears:
 3. **Reference image** — upload any image to visually condition the sprite generation
    - Works best with clear full-body character art or photos
    - Used alongside the appearance description for stronger conditioning
-4. **HuggingFace token** — paste your token (required for the ~13GB first download)
+4. **HuggingFace token** — paste your token (required for the ~15GB first download)
 5. **Your name** *(optional)* — the companion will use it when talking to you
 6. Click **완성** — sprite generation begins
 
-Generation takes **5–15 minutes** on Apple Silicon (M1/M2/M3/M4) depending on model cache state.
+Generation takes **about 5 minutes** on an M4 with 24GB once the model is downloaded, and longer on Macs with less memory. The first run also downloads the model (~15GB).
 
 After generation, a preview screen shows idle/walk/sleep animations. Click **이대로 시작** to launch the companion.
 
@@ -248,7 +251,7 @@ After generation, a preview screen shows idle/walk/sleep animations. Click **이
 - Type your message and press Enter
 - The companion responds in a speech bubble with a typewriter effect
 - A `...` thinking bubble appears while waiting for a response
-- The bubble auto-hides after 5 seconds
+- The bubble auto-hides after 5 seconds (longer for long replies)
 
 ### Interacting
 | Action | Result |
@@ -269,11 +272,11 @@ Right-click → **새 캐릭터 만들기** — clears the persona, sprites, mem
 
 Screen awareness requires **Screen Recording** permission.
 
-**System Settings → Privacy & Security → Screen Recording → enable Godot (or SpriteSoul)**
+**System Settings → Privacy & Security → Screen Recording → enable SpriteSoul**
 
 Restart after granting. Without it, the companion can still chat but won't react to what's on your screen.
 
-> If you're running the exported `.app`, the permission dialog will appear automatically with an explanation on first launch.
+> The permission dialog appears automatically with an explanation on first launch of the built `.app`. Screen awareness is not available when running from the Godot editor.
 
 ---
 
@@ -322,18 +325,20 @@ Sprite Generation (one-time at setup):
 
 ### Sprite Generation Pipeline
 1. `SpriteGenerator.gd` spawns a thread and runs `sprite_gen/generate_sprites.py`
-2. Python loads FLUX.2-klein-base-4B via diffusers + PixelArt LoRA (`svntax-dev/pixel_spritesheet_4walk_small_lora_v1`)
-3. Reference image is VAE-encoded and concatenated as visual conditioning tokens
-4. Appearance text + layout prompt fed into Qwen3 text encoder
+2. The Qwen3 text encoder is loaded alone, turns the appearance text + layout prompt into embeddings, and is unloaded again
+3. Python then loads the FLUX.2-klein-base-4B transformer and VAE via diffusers + PixelArt LoRA (`svntax-dev/pixel_spritesheet_4walk_small_lora_v1`)
+4. Reference image is VAE-encoded and concatenated as visual conditioning tokens
 5. 512×512 spritesheet generated in 15 inference steps
 6. K-centroid downscale (÷4 then ×4 with nearest) produces pixel art edges
 7. Frame splitter extracts 12 animation frames with row-consistent bounding boxes
+
+Loading the text encoder (7.5GB) and the transformer (7.2GB) one after the other instead of together keeps peak memory around 14GB instead of 22GB.
 
 ### Conversation Pipeline
 1. User input → `MemoryStore.build_messages()` → full message history with system prompt
 2. Screen context (if available) appended to system prompt
 3. POST to `http://localhost:11434/api/chat` with `gemma4:12b-it-q4_K_M`
-4. Response streamed back, typed out character by character in the speech bubble
+4. Response streamed back and shown in the speech bubble as tokens arrive
 
 ---
 
@@ -361,20 +366,20 @@ sprite-soul/
 │   ├── PersonaGenerator.gd   # Persona save/load
 │   ├── SpriteGenerator.gd    # Spawns Python generation thread
 │   ├── MemoryStore.gd        # Conversation history
-│   └── UserProfile.gd        # User name persistence
+│   ├── UserProfile.gd        # User name persistence
+│   └── export_macos.sh       # Build automation script
 ├── sprite_gen/
 │   ├── generate_sprites.py   # FLUX.2 generation + frame splitting
 │   └── requirements.txt      # Python dependencies
 ├── assets/
 │   └── fonts/
 │       └── PixelifySans-Regular.ttf
-├── docs/
-│   ├── reference_example.webp  # Reference image example
-│   ├── preview_transparent.webp # Generated companion animation
-│   └── demo_*.gif              # Feature demo GIFs
-└── scripts/
-    ├── ...gd                  # GDScript files (listed above)
-    └── export_macos.sh        # Build automation script
+├── tools/
+│   └── sc_helper.swift       # Screen capture helper (ScreenCaptureKit)
+└── docs/
+    ├── reference_example.webp  # Reference image example
+    ├── preview_transparent.webp # Generated companion animation
+    └── demo_*.gif              # Feature demo GIFs
 ```
 
 ---
@@ -387,7 +392,7 @@ To build the macOS `.app`:
 ./scripts/export_macos.sh
 ```
 
-This runs a headless Godot export and patches `NSScreenCaptureUsageDescription` into `Info.plist` automatically.
+This runs a headless Godot export, patches `NSScreenCaptureUsageDescription` into `Info.plist`, compiles the `sc_helper` screen capture binary into the app, and signs it with a `SpriteSoulDev` certificate if you have one (skipped otherwise).
 
 The output is at `build/SpriteSoul.app`.
 
@@ -396,10 +401,13 @@ The output is at `build/SpriteSoul.app`.
 ## Troubleshooting
 
 **"(연결 안 됨)" appears when chatting**
-→ Ollama is not running. Run `ollama serve` and restart the app.
+→ Ollama can't be reached. SpriteSoul starts Ollama.app on launch, so check that it is installed in `/Applications`, give it a few seconds after launch, and try again.
+
+**"(모델 없음: ollama pull …)" appears when chatting**
+→ The chat model isn't downloaded yet. Run the `ollama pull` command shown in the bubble.
 
 **Sprite generation fails immediately**
-→ Check that your HuggingFace token is valid and has Read permissions. First run downloads ~13GB — make sure you have enough disk space and a stable connection.
+→ Check that your HuggingFace token is valid and has Read permissions. First run downloads ~15GB — make sure you have enough disk space and a stable connection.
 
 **Generation progress stuck at 0%**
 → The model is downloading in the background. Check disk usage growth at `~/.cache/huggingface/hub/`. The progress bar updates every 3 seconds.
@@ -408,10 +416,10 @@ The output is at `build/SpriteSoul.app`.
 → Screen Recording permission is not granted. See [Permissions](#permissions-macos) above.
 
 **Sprite generation is very slow**
-→ Normal on first run (model load + generation). Apple Silicon M1/M2/M3/M4 with 16GB takes ~10 min. Subsequent runs are faster (model already cached).
+→ The first run includes the model download. After that it takes about 5 minutes on an M4 with 24GB. If it takes much longer, the Mac is probably running out of memory and swapping — generation peaks at about 14GB, so close other heavy apps and quit other Ollama models first.
 
 **App doesn't start after reset**
-→ Make sure `ollama serve` is running before launching.
+→ Make sure Ollama.app is installed in `/Applications` — SpriteSoul starts it on launch.
 
 **Generated sprite doesn't match the reference image**
 → Try adding a more specific appearance description. The reference image conditions shape/color broadly — the text description helps with specific features (hair color, clothing style).
